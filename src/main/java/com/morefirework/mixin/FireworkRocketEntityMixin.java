@@ -69,10 +69,14 @@ public class FireworkRocketEntityMixin {
 
         // Gold shotgun is handled here — explosion AOE
         if (type == OreFireworkItem.OreType.GOLD) {
+            Vec3d dir = self.getVelocity();
+            if (dir.lengthSquared() < 0.001) {
+                dir = new Vec3d(0, 1, 0); // default upward if stationary
+            }
             GoldShotgun.shatter(
                 self.getWorld(),
                 self.getPos(),
-                self.getVelocity().normalize(),
+                dir.normalize(),
                 self.getOwner() != null ? self.getOwner() : self
             );
             return;
