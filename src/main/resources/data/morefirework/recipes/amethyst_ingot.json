@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["AA", "AA"],
+  "key": { "A": { "item": "minecraft:amethyst_shard" } },
+  "result": { "id": "morefirework:amethyst_ingot", "count": 1 }
+}

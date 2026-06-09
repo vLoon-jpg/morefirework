@@ -1,0 +1,11 @@
+{
+  "item.morefirework.diamond_ingot": "Diamond Ingot",
+  "item.morefirework.amethyst_ingot": "Amethyst Ingot",
+  "item.morefirework.diamond_firework": "Diamond Firework Rocket",
+  "item.morefirework.iron_firework": "Iron Firework Rocket",
+  "item.morefirework.gold_firework": "Gold Firework Rocket",
+  "item.morefirework.emerald_firework": "Emerald Firework Rocket",
+  "item.morefirework.amethyst_firework": "Amethyst Firework Rocket",
+  "item.morefirework.redstone_addon": "Seeker Core (Redstone)",
+  "itemGroup.morefirework.morefirework_group": "More Firework"
+}

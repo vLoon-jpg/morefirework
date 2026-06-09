@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "morefirework",
+  "version": "${version}",
+  "name": "More Firework",
+  "description": "A combat system built on fireworks. Ore ingots, elemental rockets, seeker projectiles, and devastating combo effects.",
+  "authors": ["vLoon", "Tailor"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/morefirework/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.morefirework.MoreFirework"],
+    "client": ["com.morefirework.MoreFireworkClient"]
+  },
+  "mixins": [
+    "morefirework.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": "~1.21",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

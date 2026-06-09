@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "morefirework:diamond_ingot" },
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:gunpowder" }
+  ],
+  "result": { "id": "morefirework:diamond_firework", "count": 3 }
+}

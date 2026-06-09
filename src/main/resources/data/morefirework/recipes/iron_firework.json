@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:iron_ingot" },
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:gunpowder" }
+  ],
+  "result": { "id": "morefirework:iron_firework", "count": 3 }
+}

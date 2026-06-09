@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "morefirework:gold_firework" },
+    { "item": "morefirework:redstone_addon" }
+  ],
+  "result": { "id": "morefirework:gold_firework", "count": 1,
+    "components": {
+      "morefirework:has_redstone": true
+    }
+  }
+}

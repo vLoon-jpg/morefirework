@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:redstone" },
+    { "item": "minecraft:iron_ingot" },
+    { "item": "minecraft:amethyst_shard" }
+  ],
+  "result": { "id": "morefirework:redstone_addon", "count": 1 }
+}
