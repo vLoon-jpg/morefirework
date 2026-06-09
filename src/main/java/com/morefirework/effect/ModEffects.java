@@ -17,8 +17,11 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.TypedActionResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ModEffects {
+    private static final Logger LOG = LoggerFactory.getLogger("morefirework:effects");
     private static int tickCounter = 0;
 
     public static void register() {
@@ -28,6 +31,7 @@ public class ModEffects {
             tickCounter++;
             if (tickCounter % 40 != 0) return;
 
+            int playerCount = server.getPlayerManager().getPlayerList().size();
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
                 FireworkEffectComponent fx = ModComponents.get(player);
                 processBleedTick(player, fx);
@@ -37,15 +41,18 @@ public class ModEffects {
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ModComponents.remove(handler.player);
+            LOG.info("Player {} disconnected — effect data cleaned", handler.player.getName().getString());
         });
 
-        // Brush cleanse: right-click with vanilla Brush on air → clear bleed + fracture
+        // Brush cleanse
         UseItemCallback.EVENT.register((player, world, hand) -> {
             if (world.isClient) return TypedActionResult.pass(player.getStackInHand(hand));
             ItemStack stack = player.getStackInHand(hand);
             if (stack.isOf(Items.BRUSH)) {
                 FireworkEffectComponent fx = ModComponents.get(player);
                 if (fx.getTotalBleed() > 0 || fx.hasAnyFractureStack() || fx.countFractured() > 0) {
+                    LOG.info("Brush cleanse — player={}, bleed={}, fracture={}",
+                        player.getName().getString(), fx.getTotalBleed(), fx.countFractured());
                     brushCleanse(player);
                     stack.damage(1, player, hand == net.minecraft.util.Hand.MAIN_HAND
                         ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND);
@@ -72,6 +79,8 @@ public class ModEffects {
                 if (!armor.isEmpty()) {
                     int duraDamage = (int)(armor.getMaxDamage() * 0.02f * stacks);
                     armor.damage(duraDamage, entity, slot);
+                    LOG.debug("Bleed (amethyst combo) — {}, slot={}, stacks={}, duraDmg={}",
+                        entity.getName().getString(), slot.getName(), stacks, duraDamage);
                 }
             } else {
                 totalDamage += stacks * 1.0f;
@@ -80,6 +89,8 @@ public class ModEffects {
 
         if (totalDamage > 0) {
             entity.damage(entity.getDamageSources().generic(), totalDamage);
+            LOG.debug("Bleed tick — {}, damage={}hp, stacks={}",
+                entity.getName().getString(), totalDamage / 2, fx.getTotalBleed());
         }
 
         fx.decayBleed();
@@ -120,10 +131,15 @@ public class ModEffects {
             triggerCrystalized(entity, fx, worldTime);
         }
 
+        LOG.debug("Fracture redirect — {}, incomingDmg={}, fracturedPieces={}, redirecting to armor",
+            entity.getName().getString(), amount, fracturedCount);
+
         return 0;
     }
 
     public static void triggerCrystalized(LivingEntity entity, FireworkEffectComponent fx, long worldTime) {
+        LOG.info("CRYSTALIZED triggered — {}", entity.getName().getString());
+
         for (EquipmentSlot slot : EquipmentSlot.values()) {
             if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
             ItemStack armor = entity.getEquippedStack(slot);

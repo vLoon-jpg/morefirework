@@ -29,6 +29,7 @@ public class MoreFirework implements ModInitializer {
     @Override
     public void onInitialize() {
         LOGGER.info("More Firework — combat reimagined.");
+        LOGGER.info("Registering items, effects, and components...");
 
         ModItems.register();
         ModEffects.register();
@@ -44,13 +45,15 @@ public class MoreFirework implements ModInitializer {
         ItemGroupEvents.modifyEntriesEvent(ITEM_GROUP).register(entries -> {
             entries.add(ModItems.DIAMOND_INGOT);
             entries.add(ModItems.AMETHYST_INGOT);
+            entries.add(ModItems.REDSTONE_ADDON);
             entries.add(ModItems.DIAMOND_FIREWORK);
             entries.add(ModItems.IRON_FIREWORK);
             entries.add(ModItems.GOLD_FIREWORK);
             entries.add(ModItems.EMERALD_FIREWORK);
             entries.add(ModItems.AMETHYST_FIREWORK);
-            entries.add(ModItems.REDSTONE_ADDON);
         });
+
+        LOGGER.info("More Firework initialized successfully.");
     }
 
     public static Identifier id(String path) {

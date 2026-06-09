@@ -38,6 +38,6 @@ public class ModItems {
     }
 
     public static void register() {
-        MoreFirework.LOGGER.info("More Firework items registered.");
+        MoreFirework.LOGGER.info("  Registered {} items", 8);
     }
 }

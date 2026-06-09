@@ -3,6 +3,7 @@
   "package": "com.morefirework.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "CrossbowItemMixin",
     "FireworkRocketEntityMixin",
     "LivingEntityMixin",
     "PlayerEntityMixin",

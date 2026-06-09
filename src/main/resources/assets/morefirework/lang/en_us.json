@@ -1,11 +1,16 @@
 {
   "item.morefirework.diamond_ingot": "Diamond Ingot",
   "item.morefirework.amethyst_ingot": "Amethyst Ingot",
-  "item.morefirework.diamond_firework": "Diamond Firework Rocket",
-  "item.morefirework.iron_firework": "Iron Firework Rocket",
-  "item.morefirework.gold_firework": "Gold Firework Rocket",
-  "item.morefirework.emerald_firework": "Emerald Firework Rocket",
-  "item.morefirework.amethyst_firework": "Amethyst Firework Rocket",
-  "item.morefirework.redstone_addon": "Seeker Core (Redstone)",
+  "item.morefirework.diamond_firework_star": "Diamond Firework Star",
+  "item.morefirework.iron_firework_star": "Iron Firework Star",
+  "item.morefirework.gold_firework_star": "Gold Firework Star",
+  "item.morefirework.emerald_firework_star": "Emerald Firework Star",
+  "item.morefirework.amethyst_firework_star": "Amethyst Firework Star",
+  "item.morefirework.diamond_firework": "Diamond Rocket",
+  "item.morefirework.iron_firework": "Iron Rocket",
+  "item.morefirework.gold_firework": "Gold Rocket",
+  "item.morefirework.emerald_firework": "Emerald Rocket",
+  "item.morefirework.amethyst_firework": "Amethyst Rocket",
+  "item.morefirework.redstone_addon": "Seeker Core",
   "itemGroup.morefirework.morefirework_group": "More Firework"
 }

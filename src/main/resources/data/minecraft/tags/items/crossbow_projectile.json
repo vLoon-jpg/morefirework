@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "morefirework:diamond_firework",
+    "morefirework:iron_firework",
+    "morefirework:gold_firework",
+    "morefirework:emerald_firework",
+    "morefirework:amethyst_firework"
+  ]
+}

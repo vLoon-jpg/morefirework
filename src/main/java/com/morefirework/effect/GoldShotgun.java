@@ -5,20 +5,20 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageType;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Gold rocket shotgun: on impact, sprays 8 shrapnel pieces in a 60° cone.
  * Each piece deals 3 hearts (6 HP), reduced by armor normally.
  */
 public class GoldShotgun {
+
+    private static final Logger LOG = LoggerFactory.getLogger("morefirework:shotgun");
 
     private static final int SHRAPNEL_COUNT = 8;
     private static final float CONE_ANGLE = 60.0f; // degrees total
@@ -28,6 +28,10 @@ public class GoldShotgun {
 
     public static void shatter(World world, Vec3d impactPos, Vec3d direction, Entity shooter) {
         if (world.isClient) return;
+
+        LOG.info("Shotgun shatter — pos=({},{},{}), shooter={}",
+            (int)impactPos.x, (int)impactPos.y, (int)impactPos.z,
+            shooter != null ? shooter.getName().getString() : "none");
 
         // Normalize and compute perpendicular axes for the cone
         Vec3d forward = direction.normalize();
@@ -71,6 +75,8 @@ public class GoldShotgun {
             // Apply damage
             DamageSource source = target.getDamageSources().explosion(null, shooter);
             target.damage(source, totalDamage);
+            LOG.info("  Shrapnel: target={}, pieces={}, damage={}hp, shield={}",
+                target.getName().getString(), shrapnelHitting, totalDamage / 2, hasShield);
 
             // Knockback away from impact
             Vec3d knockback = toTargetDir.multiply(KNOCKBACK_STRENGTH);

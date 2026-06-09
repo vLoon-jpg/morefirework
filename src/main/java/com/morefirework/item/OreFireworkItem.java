@@ -1,21 +1,21 @@
 package com.morefirework.item;
 
 import com.mojang.serialization.Codec;
+import com.morefirework.MoreFirework;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.component.ComponentType;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.NbtComponent;
+import net.minecraft.component.type.FireworkExplosionComponent;
+import net.minecraft.component.type.FireworksComponent;
 import net.minecraft.item.FireworkRocketItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 
-import java.util.function.UnaryOperator;
-
-import com.morefirework.MoreFirework;
+import java.util.List;
 
 public class OreFireworkItem extends FireworkRocketItem {
     private final OreType oreType;
@@ -45,6 +45,11 @@ public class OreFireworkItem extends FireworkRocketItem {
 
     public OreType getOreType() {
         return oreType;
+    }
+
+    @Override
+    public ItemStack getDefaultStack() {
+        return ensureFireworks(super.getDefaultStack());
     }
 
     @Override
@@ -84,6 +89,25 @@ public class OreFireworkItem extends FireworkRocketItem {
 
     public static ItemStack setRedstone(ItemStack stack, boolean flag) {
         stack.set(HAS_REDSTONE, flag);
+        return stack;
+    }
+
+    /**
+     * Ensures every OreFireworkItem stack has FIREWORKS explosion data.
+     * Creative menu items have none — this gives them a default white burst.
+     * Crafted items (made from dyed rockets) already have FIREWORKS — we leave them.
+     */
+    public static ItemStack ensureFireworks(ItemStack stack) {
+        FireworksComponent fw = stack.get(DataComponentTypes.FIREWORKS);
+        if (fw == null || fw.explosions().isEmpty()) {
+            IntList colors = IntArrayList.of(0xFFFFFF);
+            var defaultBurst = new FireworkExplosionComponent(
+                FireworkExplosionComponent.Type.BURST,
+                colors, colors, false, false
+            );
+            stack.set(DataComponentTypes.FIREWORKS,
+                new FireworksComponent(1, List.of(defaultBurst)));
+        }
         return stack;
     }
 

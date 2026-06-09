@@ -1,9 +1,10 @@
 {
   "type": "minecraft:crafting_shapeless",
   "ingredients": [
-    { "item": "minecraft:emerald" },
-    { "item": "minecraft:paper" },
-    { "item": "minecraft:gunpowder" }
+    { "item": "minecraft:firework_rocket" },
+    { "item": "minecraft:emerald" }
   ],
-  "result": { "id": "morefirework:emerald_firework", "count": 3 }
+  "result": { "id": "morefirework:emerald_firework", "count": 1,
+    "components": { "morefirework:ore_type": "EMERALD" }
+  }
 }
