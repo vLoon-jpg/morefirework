@@ -11,13 +11,14 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.hit.EntityHitResult;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Random;
 
@@ -36,30 +37,76 @@ public class FireworkRocketEntityMixin {
         SeekerBehavior.tick(self);
     }
 
+    /** Direct entity collision — apply ore effect */
     @Inject(method = "onEntityHit", at = @At("HEAD"))
     private void morefirework$onEntityHit(EntityHitResult hitResult, CallbackInfo ci) {
         Entity target = hitResult.getEntity();
-        if (!(target instanceof LivingEntity livingTarget)) {
-            LOG.debug("Non-living entity hit: {}", target.getType().getName().getString());
-            return;
-        }
+        if (!(target instanceof LivingEntity livingTarget)) return;
         if (livingTarget.getWorld().isClient) return;
 
         FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         ItemStack rocket = self.getStack();
-        if (!(rocket.getItem() instanceof OreFireworkItem oreItem)) {
-            LOG.trace("Non-ore firework rocket hit — skipping");
+        if (!(rocket.getItem() instanceof OreFireworkItem oreItem)) return;
+
+        applyOreEffect(livingTarget, oreItem.getOreType(), self);
+    }
+
+    /**
+     * Hook AFTER the vanilla explosion to apply AOE effects.
+     * Fireworks that expire mid-flight or hit blocks explode without
+     * triggering onEntityHit — this catches those cases.
+     */
+    @Inject(method = "explode", at = @At("TAIL"))
+    private void morefirework$explodeAoeEffect(CallbackInfo ci) {
+        FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
+        ItemStack rocket = self.getStack();
+        if (!(rocket.getItem() instanceof OreFireworkItem oreItem)) return;
+        if (self.getWorld().isClient) return;
+
+        OreFireworkItem.OreType type = oreItem.getOreType();
+        var explosions = rocket.get(net.minecraft.component.DataComponentTypes.FIREWORKS);
+        float radius = (explosions != null ? explosions.explosions().size() * 2f : 0f) + 5f;
+
+        // Gold shotgun is handled here — explosion AOE
+        if (type == OreFireworkItem.OreType.GOLD) {
+            GoldShotgun.shatter(
+                self.getWorld(),
+                self.getPos(),
+                self.getVelocity().normalize(),
+                self.getOwner() != null ? self.getOwner() : self
+            );
             return;
         }
 
-        OreFireworkItem.OreType type = oreItem.getOreType();
-        FireworkEffectComponent fx = ModComponents.get(livingTarget);
-        long worldTime = self.getWorld().getTime();
+        Box area = new Box(
+            self.getX() - radius, self.getY() - radius, self.getZ() - radius,
+            self.getX() + radius, self.getY() + radius, self.getZ() + radius
+        );
+
+        for (Entity entity : self.getWorld().getOtherEntities(self.getOwner(), area)) {
+            if (!(entity instanceof LivingEntity livingTarget)) continue;
+            if (livingTarget.getWorld().isClient) continue;
+
+            double dist = livingTarget.getPos().distanceTo(self.getPos());
+            if (dist > radius) continue;
+
+            applyOreEffect(livingTarget, type, self);
+
+            // AOE knockback
+            Vec3d knockback = livingTarget.getPos().subtract(self.getPos()).normalize().multiply(0.75);
+            livingTarget.addVelocity(knockback.x, 0.2, knockback.z);
+            livingTarget.velocityModified = true;
+        }
+    }
+
+    private static void applyOreEffect(LivingEntity target, OreFireworkItem.OreType type, FireworkRocketEntity self) {
+        FireworkEffectComponent fx = ModComponents.get(target);
+        long worldTime = target.getWorld().getTime();
         Random random = new Random();
 
-        LOG.info("ROCKET HIT — type={}, target={}, pos=({},{},{})",
-            type, livingTarget.getName().getString(),
-            (int)livingTarget.getX(), (int)livingTarget.getY(), (int)livingTarget.getZ());
+        LOG.info("ROCKET EFFECT — type={}, target={}, pos=({},{},{})",
+            type, target.getName().getString(),
+            (int)target.getX(), (int)target.getY(), (int)target.getZ());
 
         switch (type) {
             case DIAMOND -> {
@@ -67,38 +114,27 @@ public class FireworkRocketEntityMixin {
                     EquipmentSlot.LEGS, EquipmentSlot.FEET};
                 EquipmentSlot marked = armorSlots[random.nextInt(4)];
                 fx.markDiamond(marked);
-                LOG.info("  DIAMOND — marked armor slot: {}", marked.getName());
+                LOG.info("  DIAMOND — marked: {}", marked.getName());
             }
             case IRON -> {
                 EquipmentSlot[] slots = shuffledArmorSlots(random);
                 for (int i = 0; i < 4; i++) fx.addBleed(slots[i % slots.length], 1);
-                LOG.info("  IRON — applied 4 bleed stacks. Total bleed: {}", fx.getTotalBleed());
+                LOG.info("  IRON — bleed stacks: {}", fx.getTotalBleed());
             }
             case AMETHYST -> {
-                if (fx.isCrystalizedImmune(worldTime)) {
-                    LOG.info("  AMETHYST — target is crystalized-immune, skipping");
-                    break;
-                }
+                if (fx.isCrystalizedImmune(worldTime)) break;
                 for (int i = 0; i < 2; i++) {
                     EquipmentSlot slot = rollFractureSlot(random);
                     fx.addFracture(slot, 1);
                     if (fx.getFracture(slot) >= 4) fx.setFractured(slot, true);
                 }
-                LOG.info("  AMETHYST — applied 2 fracture stacks. Fractured pieces: {}", fx.countFractured());
+                LOG.info("  AMETHYST — fractured pieces: {}", fx.countFractured());
             }
             case EMERALD -> {
                 fx.addEmeraldHit(worldTime);
-                LOG.info("  EMERALD — heat signature level: {}", fx.getEmeraldLevel(worldTime));
+                LOG.info("  EMERALD — heat level: {}", fx.getEmeraldLevel(worldTime));
             }
-            case GOLD -> {
-                LOG.info("  GOLD — triggering shotgun blast");
-                GoldShotgun.shatter(
-                    livingTarget.getWorld(),
-                    livingTarget.getPos().add(0, livingTarget.getHeight() / 2, 0),
-                    self.getVelocity(),
-                    self.getOwner() != null ? self.getOwner() : self
-                );
-            }
+            case GOLD -> { /* Handled in explode AOE or onEntityHit */ }
         }
     }
 
