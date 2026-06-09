@@ -36,12 +36,6 @@ public class FireworkRocketEntityMixin {
         SeekerBehavior.tick(self);
     }
 
-    /** Allow firework rockets to hit ALL entities, not just players */
-    @Inject(method = "canHit", at = @At("HEAD"), cancellable = true)
-    protected void morefirework$alwaysHit(CallbackInfoReturnable<Boolean> cir) {
-        cir.setReturnValue(true);
-    }
-
     @Inject(method = "onEntityHit", at = @At("HEAD"))
     private void morefirework$onEntityHit(EntityHitResult hitResult, CallbackInfo ci) {
         Entity target = hitResult.getEntity();
