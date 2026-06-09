@@ -31,11 +31,14 @@ public class ModEffects {
             tickCounter++;
             if (tickCounter % 40 != 0) return;
 
-            int playerCount = server.getPlayerManager().getPlayerList().size();
-            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                FireworkEffectComponent fx = ModComponents.get(player);
-                processBleedTick(player, fx);
-                processStunTick(player, fx);
+            for (var world : server.getWorlds()) {
+                for (var entity : world.iterateEntities()) {
+                    if (entity instanceof LivingEntity living) {
+                        FireworkEffectComponent fx = ModComponents.get(living);
+                        processBleedTick(living, fx);
+                        processStunTick(living, fx);
+                    }
+                }
             }
         });
 
