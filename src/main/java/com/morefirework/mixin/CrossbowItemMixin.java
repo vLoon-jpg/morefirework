@@ -20,14 +20,22 @@ import java.util.function.Predicate;
 @Mixin(CrossbowItem.class)
 public class CrossbowItemMixin {
 
-    /** @Overwrite: accept OreFireworkItem as crossbow ammo */
+    /**
+     * Accept OreFireworkItem as crossbow ammo in addition to vanilla fireworks.
+     * @author vLoon
+     * @reason Ore rockets must be valid crossbow ammo alongside vanilla fireworks
+     */
     @Overwrite
     public Predicate<ItemStack> getHeldProjectiles() {
         return stack -> stack.getItem() instanceof OreFireworkItem
             || stack.isOf(Items.FIREWORK_ROCKET);
     }
 
-    /** @Overwrite: firework speed for ore rockets */
+    /**
+     * Firework speed (1.6f) for ore rockets; arrow speed (3.15f) otherwise.
+     * @author vLoon
+     * @reason Ore rockets share firework trajectory speed
+     */
     @Overwrite
     private static float getSpeed(ChargedProjectilesComponent projectiles) {
         return projectiles.contains(Items.FIREWORK_ROCKET) || hasOreRocket(projectiles)
