@@ -83,6 +83,7 @@ public class SeekerBehavior {
             int lostTicks = getLostTicks(rocket) + 1;
             setLostTicks(rocket, lostTicks);
             if (lostTicks >= LOST_TARGET_TICKS) {
+                SeekerData.remove(rocket);
                 rocket.discard();
                 // Visual puff
                 world.createExplosion(null, rocket.getX(), rocket.getY(), rocket.getZ(),

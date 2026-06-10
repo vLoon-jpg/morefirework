@@ -3,6 +3,7 @@ package com.morefirework.effect;
 import com.morefirework.MoreFirework;
 import com.morefirework.component.FireworkEffectComponent;
 import com.morefirework.component.ModComponents;
+import com.morefirework.mixin.LivingEntityAccessor;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -100,6 +101,8 @@ public class ModEffects {
 
         if (totalDamage > 0) {
             entity.damage(entity.getDamageSources().generic(), totalDamage);
+            // Bypass vanilla damage invulnerability frames so next tick's bleed registers
+            ((LivingEntityAccessor) entity).setHurtTime(0);
             LOG.debug("Bleed tick — {}, damage={}hp, stacks={}",
                 entity.getName().getString(), totalDamage, fx.getTotalBleed());
         }
@@ -130,7 +133,7 @@ public class ModEffects {
             float multiplier = switch (fracturedCount) {
                 case 1 -> 4.0f;
                 case 2 -> 3.0f;
-                case 3 -> 3.0f;
+                case 3, 4 -> 3.0f;
                 default -> 1.0f;
             };
 
@@ -171,6 +174,7 @@ public class ModEffects {
                     ItemStack armor = entity.getEquippedStack(slot);
                     if (!armor.isEmpty()) {
                         result *= 2.0f; // Marked armor piece provides zero protection → double effective damage
+                        fx.setStabImmunity(slot, worldTime, 10 * 20); // 10s cooldown before this slot can be stabbed again
                         LOG.info("DIAMOND STAB — {}, slot={}, baseDmg={}, boostedDmg={}",
                             entity.getName().getString(), slot.getName(), amount, result);
                         break;

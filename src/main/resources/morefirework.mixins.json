@@ -9,7 +9,8 @@
     "PlayerEntityMixin",
     "PlayerDataMixin",
     "ProjectileEntityMixin",
-    "DamageSourceMixin"
+    "DamageSourceMixin",
+    "LivingEntityAccessor"
   ],
   "client": [
     "ClientPlayerEntityMixin"

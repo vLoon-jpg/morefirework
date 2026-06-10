@@ -29,8 +29,8 @@ import java.util.UUID;
 public class FireworkRocketEntityMixin {
     private static final Logger LOG = LoggerFactory.getLogger("morefirework:rocket");
 
-    // Track entities directly hit so they don't get double effects from the AOE explosion
-    private static final Set<UUID> directlyHitEntities = new HashSet<>();
+    // Track entities directly hit by THIS rocket so they don't get double effects
+    private final Set<UUID> directlyHitEntities = new HashSet<>();
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void morefirework$seekerTick(CallbackInfo ci) {
@@ -150,7 +150,13 @@ public class FireworkRocketEntityMixin {
                 fx.addEmeraldHit(worldTime);
                 LOG.info("  EMERALD — heat level: {}", fx.getEmeraldLevel(worldTime));
             }
-            case GOLD -> { /* Handled in explode AOE or onEntityHit */ }
+            case GOLD -> {
+                // Direct hit — shrapnel cone from impact toward target
+                Vec3d dir = target.getPos().subtract(self.getPos());
+                if (dir.lengthSquared() < 0.001) dir = new Vec3d(0, 1, 0);
+                GoldShotgun.shatter(target.getWorld(), target.getPos(), dir.normalize(), 
+                    self.getOwner() != null ? self.getOwner() : self);
+            }
         }
     }
 
