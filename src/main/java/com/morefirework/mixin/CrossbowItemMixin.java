@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.function.Predicate;
 
 @Mixin(CrossbowItem.class)
-public class CrossbowItemMixin {
+public class    CrossbowItemMixin {
 
     /**
      * Accept OreFireworkItem as crossbow ammo in addition to vanilla fireworks.

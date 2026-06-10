@@ -20,11 +20,17 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
 
 @Mixin(FireworkRocketEntity.class)
 public class FireworkRocketEntityMixin {
     private static final Logger LOG = LoggerFactory.getLogger("morefirework:rocket");
+
+    // Track entities directly hit so they don't get double effects from the AOE explosion
+    private static final Set<UUID> directlyHitEntities = new HashSet<>();
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void morefirework$seekerTick(CallbackInfo ci) {
@@ -47,6 +53,9 @@ public class FireworkRocketEntityMixin {
         FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         ItemStack rocket = self.getStack();
         if (!(rocket.getItem() instanceof OreFireworkItem oreItem)) return;
+
+        // Track this entity so the AOE explosion doesn't hit it again
+        directlyHitEntities.add(target.getUuid());
 
         applyOreEffect(livingTarget, oreItem.getOreType(), self);
     }
@@ -90,6 +99,9 @@ public class FireworkRocketEntityMixin {
         for (Entity entity : self.getWorld().getOtherEntities(self.getOwner(), area)) {
             if (!(entity instanceof LivingEntity livingTarget)) continue;
             if (livingTarget.getWorld().isClient) continue;
+
+            // Skip entities that were already hit directly by onEntityHit
+            if (directlyHitEntities.remove(livingTarget.getUuid())) continue;
 
             double dist = livingTarget.getPos().distanceTo(self.getPos());
             if (dist > radius) continue;

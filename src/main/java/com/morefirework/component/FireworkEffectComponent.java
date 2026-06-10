@@ -116,6 +116,13 @@ public class FireworkEffectComponent {
     public int countFractured() { return (int) fractured.values().stream().filter(b -> b).count(); }
     public void clearFracture() { fractureStacks.clear(); fractured.clear(); }
     public boolean hasAnyFractureStack() { return fractureStacks.values().stream().anyMatch(i -> i > 0); }
+    public void decayFracture() {
+        fractureStacks.replaceAll((s, v) -> Math.max(0, v - 1));
+        // Only un-fracture slots that have dropped below 4 stacks
+        for (EquipmentSlot slot : fractureStacks.keySet()) {
+            if (fractureStacks.get(slot) < 4) fractured.put(slot, false);
+        }
+    }
 
     // === Crystalized ===
     public boolean isCrystalizedImmune(long worldTime) { return worldTime < crystalizedImmunityUntil; }

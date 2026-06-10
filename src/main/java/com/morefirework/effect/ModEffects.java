@@ -29,14 +29,18 @@ public class ModEffects {
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             tickCounter++;
-            if (tickCounter % 40 != 0) return;
 
             for (var world : server.getWorlds()) {
                 for (var entity : world.iterateEntities()) {
                     if (entity instanceof LivingEntity living) {
                         FireworkEffectComponent fx = ModComponents.get(living);
-                        processBleedTick(living, fx);
-                        processStunTick(living, fx);
+                        processBleedTick(living, fx);      // every tick — smooth DOT
+                        processStunTick(living, fx);        // every tick — velocity lock
+                        // Decay runs every 40 ticks (2 seconds)
+                        if (tickCounter % 40 == 0) {
+                            fx.decayBleed();
+                            processFractureDecayTick(living, fx);
+                        }
                     }
                 }
             }
@@ -80,23 +84,25 @@ public class ModEffects {
             if (hasAmethyst) {
                 ItemStack armor = entity.getEquippedStack(slot);
                 if (!armor.isEmpty()) {
-                    int duraDamage = (int)(armor.getMaxDamage() * 0.02f * stacks);
+                    // Per-tick durability drain: maxDura × 0.02 × stacks / 40.
+                    // Same total as old 40-tick cycle: maxDura × 0.02 × stacks.
+                    int duraDamage = Math.max(1, (int)(armor.getMaxDamage() * 0.0005f * stacks));
                     armor.damage(duraDamage, entity, slot);
                     LOG.debug("Bleed (amethyst combo) — {}, slot={}, stacks={}, duraDmg={}",
                         entity.getName().getString(), slot.getName(), stacks, duraDamage);
                 }
             } else {
-                totalDamage += stacks * 1.0f;
+                // Per-tick damage: stacks × 0.025 HP per tick.
+                // Over 40 ticks (before decay) = stacks × 1.0 HP total — same as old burst.
+                totalDamage += stacks * 0.025f;
             }
         }
 
         if (totalDamage > 0) {
             entity.damage(entity.getDamageSources().generic(), totalDamage);
             LOG.debug("Bleed tick — {}, damage={}hp, stacks={}",
-                entity.getName().getString(), totalDamage / 2, fx.getTotalBleed());
+                entity.getName().getString(), totalDamage, fx.getTotalBleed());
         }
-
-        fx.decayBleed();
     }
 
     private static void processStunTick(LivingEntity entity, FireworkEffectComponent fx) {
@@ -106,38 +112,74 @@ public class ModEffects {
         }
     }
 
+    private static void processFractureDecayTick(LivingEntity entity, FireworkEffectComponent fx) {
+        if (fx.hasAnyFractureStack()) {
+            fx.decayFracture();
+        }
+    }
+
     public static float onDamageReceived(LivingEntity entity, float amount) {
         FireworkEffectComponent fx = ModComponents.get(entity);
         long worldTime = entity.getWorld().getTime();
 
         int fracturedCount = fx.countFractured();
-        if (fracturedCount == 0) return amount;
+        float afterFracture = amount;
 
-        float multiplier = switch (fracturedCount) {
-            case 1 -> 4.0f;
-            case 2 -> 3.0f;
-            case 3 -> 3.0f;
-            default -> 1.0f;
-        };
+        // --- Step 1: Fracture redirect (Armor → takes durability damage) ---
+        if (fracturedCount > 0) {
+            float multiplier = switch (fracturedCount) {
+                case 1 -> 4.0f;
+                case 2 -> 3.0f;
+                case 3 -> 3.0f;
+                default -> 1.0f;
+            };
 
-        float duraPerPiece = amount * multiplier;
+            float duraPerPiece = amount * multiplier;
+            boolean anyArmorExists = false;
 
-        for (EquipmentSlot slot : EquipmentSlot.values()) {
-            if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
-            if (fx.isFractured(slot)) {
-                ItemStack armor = entity.getEquippedStack(slot);
-                armor.damage((int) duraPerPiece, entity, slot);
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
+                if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
+                if (fx.isFractured(slot)) {
+                    ItemStack armor = entity.getEquippedStack(slot);
+                    if (!armor.isEmpty()) {
+                        anyArmorExists = true;
+                        armor.damage((int) duraPerPiece, entity, slot);
+                    }
+                }
+            }
+
+            // BUGFIX: only redirect to zero if at least one fractured slot has armor.
+            // Naked targets with fracture stacks take normal HP damage.
+            if (anyArmorExists) {
+                afterFracture = 0;
+            }
+
+            if (fracturedCount >= 4 && !fx.isCrystalizedImmune(worldTime)) {
+                triggerCrystalized(entity, fx, worldTime);
+            }
+
+            LOG.debug("Fracture redirect — {}, incomingDmg={}, fracturedPieces={}, anyArmor={}, resultDmg={}",
+                entity.getName().getString(), amount, fracturedCount, anyArmorExists, afterFracture);
+        }
+
+        // --- Step 2: Diamond Stab — double damage through marked armor ---
+        float result = afterFracture;
+        if (result > 0) {
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
+                if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
+                if (fx.isDiamondMarked(slot) && !fx.isStabImmune(slot, worldTime)) {
+                    ItemStack armor = entity.getEquippedStack(slot);
+                    if (!armor.isEmpty()) {
+                        result *= 2.0f; // Marked armor piece provides zero protection → double effective damage
+                        LOG.info("DIAMOND STAB — {}, slot={}, baseDmg={}, boostedDmg={}",
+                            entity.getName().getString(), slot.getName(), amount, result);
+                        break;
+                    }
+                }
             }
         }
 
-        if (fracturedCount >= 4 && !fx.isCrystalizedImmune(worldTime)) {
-            triggerCrystalized(entity, fx, worldTime);
-        }
-
-        LOG.debug("Fracture redirect — {}, incomingDmg={}, fracturedPieces={}, redirecting to armor",
-            entity.getName().getString(), amount, fracturedCount);
-
-        return 0;
+        return result;
     }
 
     public static void triggerCrystalized(LivingEntity entity, FireworkEffectComponent fx, long worldTime) {
