@@ -112,7 +112,7 @@ public class OreFireworkItem extends FireworkRocketItem {
                 colors, colors, false, false
             );
             stack.set(DataComponentTypes.FIREWORKS,
-                new FireworksComponent(1, List.of(defaultBurst)));
+                new FireworksComponent(2, List.of(defaultBurst)));
         }
         return stack;
     }
