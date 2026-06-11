@@ -52,11 +52,11 @@ public class MoreFirework implements ModInitializer {
             entries.add(ModItems.DIAMOND_INGOT);
             entries.add(ModItems.AMETHYST_INGOT);
             entries.add(ModItems.REDSTONE_ADDON);
-            entries.add(ModItems.DIAMOND_FIREWORK);
-            entries.add(ModItems.IRON_FIREWORK);
-            entries.add(ModItems.GOLD_FIREWORK);
-            entries.add(ModItems.EMERALD_FIREWORK);
-            entries.add(ModItems.AMETHYST_FIREWORK);
+            entries.add(ModItems.DIAMOND_FIREWORK.getDefaultStack());
+            entries.add(ModItems.IRON_FIREWORK.getDefaultStack());
+            entries.add(ModItems.GOLD_FIREWORK.getDefaultStack());
+            entries.add(ModItems.EMERALD_FIREWORK.getDefaultStack());
+            entries.add(ModItems.AMETHYST_FIREWORK.getDefaultStack());
         });
 
         LOGGER.info("More Firework initialized successfully.");
