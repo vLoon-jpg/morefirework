@@ -12,5 +12,6 @@
   "item.morefirework.emerald_firework": "Emerald Rocket",
   "item.morefirework.amethyst_firework": "Amethyst Rocket",
   "item.morefirework.redstone_addon": "Seeker Core",
-  "itemGroup.morefirework.morefirework_group": "More Firework"
+  "itemGroup.morefirework.morefirework_group": "More Firework",
+  "death.attack.morefirework.bleed": "%1$s bled to death"
 }

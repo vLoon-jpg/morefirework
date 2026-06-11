@@ -5,13 +5,13 @@ import com.morefirework.component.ModComponents;
 import com.morefirework.item.OreFireworkItem;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
-import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -20,23 +20,13 @@ import java.util.List;
  */
 public class SeekerBehavior {
 
-    // Speed curve
-    private static final double INITIAL_SPEED = 8.0;
-    private static final double ACCELERATION = 2.0;  // per second
+    // Speed curve: starts slow, speeds up
+    private static final double INITIAL_SPEED = 2.0;
+    private static final double ACCELERATION = 4.0;  // per second
     private static final double MAX_SPEED = 35.0;
-
-    // Turning: radians per tick (20 ticks/sec)
-    private static final double TURN_LOW_SPEED = Math.PI / 4;        // 45°/tick  (< 15 b/s)
-    private static final double TURN_MID_SPEED = Math.PI / 12;        // 15°/tick  (15-25 b/s)
-    private static final double TURN_HIGH_SPEED = Math.PI / 36;       // 5°/tick   (> 25 b/s)
-
-    // Emerald homing multipliers
-    private static final double EMERALD_L2_MULT = 1.5;
-    private static final double EMERALD_L3_MULT = 2.0;
 
     // Target acquisition
     private static final double SEEK_RANGE = 50.0;
-    private static final double LOCK_RANGE = 100.0;
     private static final int LOST_TARGET_TICKS = 8 * 20; // 8 seconds
 
     /**
@@ -50,42 +40,66 @@ public class SeekerBehavior {
         if (!(rocket.getStack().getItem() instanceof OreFireworkItem)) return false;
         if (!OreFireworkItem.hasRedstone(rocket.getStack())) return false;
 
-        // Track flight time via persistent NBT on the entity
-        int flightTicks = getFlightTicks(rocket);
-        flightTicks++;
-        setFlightTicks(rocket, flightTicks);
-
         World world = rocket.getWorld();
-
-        // Find nearest Emerald-marked target
-        LivingEntity target = findTarget(world, rocket, flightTicks);
         long worldTime = world.getTime();
 
-        if (target != null) {
-            // Homing
-            double speed = Math.min(MAX_SPEED, INITIAL_SPEED + (flightTicks / 20.0) * ACCELERATION);
-            double turnRate = getTurnRate(speed);
-            int emeraldLevel = getTargetEmeraldLevel(target, worldTime);
-            turnRate *= emeraldMultiplier(emeraldLevel);
+        // Track flight time via static seeker data tracker
+        SeekerData data = SeekerData.getOrCreate(rocket);
+        data.flightTicks++;
+
+        // Calculate turning rate which degrades over time (harder to turn)
+        // Starts at 20 degrees/tick, drops to 2 degrees/tick by 9s
+        double turnRate = Math.max(Math.toRadians(2), Math.toRadians(20) - (data.flightTicks / 20.0) * Math.toRadians(2));
+
+        // Find nearest Emerald-marked target in our vision cone with line-of-sight
+        LivingEntity activeTarget = findTargetInVisionCone(world, rocket);
+
+        if (activeTarget != null) {
+            // We have a direct lock-on target!
+            data.lastTargetId = activeTarget.getId();
+            data.lastTargetPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
+            data.lostTicks = 0;
+
+            double speed = Math.min(MAX_SPEED, INITIAL_SPEED + (data.flightTicks / 20.0) * ACCELERATION);
+            
+            // Turn rate multiplier based on Emerald mark level
+            int emeraldLevel = ModComponents.get(activeTarget).getEmeraldLevel(worldTime);
+            double currentTurnRate = turnRate * emeraldMultiplier(emeraldLevel);
 
             Vec3d currentDir = rocket.getVelocity().normalize();
-            Vec3d toTarget = target.getPos().add(0, target.getHeight() / 2, 0)
-                .subtract(rocket.getPos()).normalize();
+            Vec3d targetCenterPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
+            Vec3d toTarget = targetCenterPos.subtract(rocket.getPos()).normalize();
 
             // Smoothly rotate current direction toward target
-            Vec3d newDir = slerp(currentDir, toTarget, turnRate);
+            Vec3d newDir = slerp(currentDir, toTarget, currentTurnRate);
             rocket.setVelocity(newDir.multiply(speed));
-
-            // Reset lost timer
-            setLostTicks(rocket, 0);
         } else {
-            // No target — check timeout
-            int lostTicks = getLostTicks(rocket) + 1;
-            setLostTicks(rocket, lostTicks);
-            if (lostTicks >= LOST_TARGET_TICKS) {
+            // Direct lock lost — check if we can track the last known position/direction of the target
+            Entity lastTarget = null;
+            if (data.lastTargetId != -1) {
+                lastTarget = world.getEntityById(data.lastTargetId);
+            }
+
+            if (lastTarget instanceof LivingEntity && lastTarget.isAlive() && data.lastTargetPos != null) {
+                // Smart prediction: update last target position if they are still alive
+                data.lastTargetPos = lastTarget.getPos().add(0, lastTarget.getHeight() / 2, 0);
+                
+                double speed = Math.min(MAX_SPEED, INITIAL_SPEED + (data.flightTicks / 20.0) * ACCELERATION);
+                
+                Vec3d currentDir = rocket.getVelocity().normalize();
+                Vec3d toTarget = data.lastTargetPos.subtract(rocket.getPos()).normalize();
+
+                // Steer towards last known position
+                Vec3d newDir = slerp(currentDir, toTarget, turnRate);
+                rocket.setVelocity(newDir.multiply(speed));
+            }
+
+            // Increment lost timer
+            data.lostTicks++;
+            if (data.lostTicks >= LOST_TARGET_TICKS) {
                 SeekerData.remove(rocket);
                 rocket.discard();
-                // Visual puff
+                // Visual self-destruct puff
                 world.createExplosion(null, rocket.getX(), rocket.getY(), rocket.getZ(),
                     0f, false, World.ExplosionSourceType.NONE);
             }
@@ -94,8 +108,9 @@ public class SeekerBehavior {
         return true;
     }
 
-    private static LivingEntity findTarget(World world, FireworkRocketEntity rocket, int flightTicks) {
-        if (flightTicks < 40) return null; // 2-second startup before seeking
+    private static LivingEntity findTargetInVisionCone(World world, FireworkRocketEntity rocket) {
+        // Homing starts after a brief startup delay of 10 ticks (0.5s) to allow launching
+        if (SeekerData.getOrCreate(rocket).flightTicks < 10) return null;
 
         Box searchBox = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
             rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
@@ -104,32 +119,50 @@ public class SeekerBehavior {
             e -> {
                 if (e == rocket.getOwner()) return false;
                 if (e.isDead()) return false;
+                
                 FireworkEffectComponent fx = ModComponents.get(e);
-                return fx.hasEmeraldMark(e.getWorld().getTime());
+                if (!fx.hasEmeraldMark(e.getWorld().getTime())) return false;
+
+                // Check Line of Sight
+                if (!canSee(world, rocket, e)) return false;
+
+                // Check if target is in 90-degree forward vision cone (45-degree half-angle)
+                Vec3d forward = rocket.getVelocity().normalize();
+                Vec3d toTarget = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
+                double dot = forward.dotProduct(toTarget);
+                double angle = Math.acos(Math.min(1.0, Math.max(-1.0, dot)));
+                return angle <= Math.toRadians(45); // 90-degree vision cone
             });
 
         if (candidates.isEmpty()) return null;
 
-        // Pick closest
+        // Lock on to target nearest to the center of the cone (largest dot product)
+        Vec3d forward = rocket.getVelocity().normalize();
         return candidates.stream()
-            .min(Comparator.comparingDouble(e -> e.squaredDistanceTo(rocket)))
+            .max((e1, e2) -> {
+                Vec3d toE1 = e1.getPos().add(0, e1.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
+                Vec3d toE2 = e2.getPos().add(0, e2.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
+                return Double.compare(forward.dotProduct(toE1), forward.dotProduct(toE2));
+            })
             .orElse(null);
     }
 
-    private static int getTargetEmeraldLevel(LivingEntity target, long worldTime) {
-        return ModComponents.get(target).getEmeraldLevel(worldTime);
-    }
-
-    private static double getTurnRate(double speed) {
-        if (speed < 15) return TURN_LOW_SPEED;
-        if (speed < 25) return TURN_MID_SPEED;
-        return TURN_HIGH_SPEED;
+    private static boolean canSee(World world, Entity source, Entity target) {
+        Vec3d start = source.getPos();
+        Vec3d end = target.getPos().add(0, target.getHeight() / 2, 0);
+        BlockHitResult hit = world.raycast(new RaycastContext(
+            start, end,
+            RaycastContext.ShapeType.COLLIDER,
+            RaycastContext.FluidHandling.NONE,
+            source
+        ));
+        return hit.getType() == BlockHitResult.Type.MISS;
     }
 
     private static double emeraldMultiplier(int level) {
         return switch (level) {
-            case 2 -> EMERALD_L2_MULT;
-            case 3 -> EMERALD_L3_MULT;
+            case 2 -> 1.5;
+            case 3 -> 2.0;
             default -> 1.0;
         };
     }
@@ -153,43 +186,20 @@ public class SeekerBehavior {
         return a.multiply(s0).add(b.multiply(s1));
     }
 
-    // === Entity persistent data (stored as NBT on the firework entity) ===
+    // === Entity persistent data ===
 
-    private static final String KEY_FLIGHT_TICKS = "MoreFireworkFlightTicks";
-    private static final String KEY_LOST_TICKS = "MoreFireworkLostTicks";
-
-    private static int getFlightTicks(FireworkRocketEntity rocket) {
-        // Use the rocket's NBT to track flight time across ticks.
-        // In practice, store in the Entity NBT or a static map.
-        // For simplicity, we track via a static map keyed by entity ID.
-        return SeekerData.getOrCreate(rocket).flightTicks;
-    }
-
-    private static void setFlightTicks(FireworkRocketEntity rocket, int ticks) {
-        SeekerData.getOrCreate(rocket).flightTicks = ticks;
-    }
-
-    private static int getLostTicks(FireworkRocketEntity rocket) {
-        return SeekerData.getOrCreate(rocket).lostTicks;
-    }
-
-    private static void setLostTicks(FireworkRocketEntity rocket, int ticks) {
-        SeekerData.getOrCreate(rocket).lostTicks = ticks;
-    }
-
-    /**
-     * Simple mutable data holder keyed by entity ID (not UUID — entity IDs recycle).
-     */
-    static class SeekerData {
-        int flightTicks = 0;
-        int lostTicks = 0;
+    public static class SeekerData {
+        public int flightTicks = 0;
+        public int lostTicks = 0;
+        public int lastTargetId = -1;
+        public Vec3d lastTargetPos = null;
         private static final java.util.Map<Integer, SeekerData> TRACKER = new java.util.concurrent.ConcurrentHashMap<>();
 
-        static SeekerData getOrCreate(FireworkRocketEntity rocket) {
+        public static SeekerData getOrCreate(FireworkRocketEntity rocket) {
             return TRACKER.computeIfAbsent(rocket.getId(), id -> new SeekerData());
         }
 
-        static void remove(FireworkRocketEntity rocket) {
+        public static void remove(FireworkRocketEntity rocket) {
             TRACKER.remove(rocket.getId());
         }
     }

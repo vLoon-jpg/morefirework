@@ -16,23 +16,24 @@ import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.HashSet;
-import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Mixin(FireworkRocketEntity.class)
-public class FireworkRocketEntityMixin {
+public abstract class FireworkRocketEntityMixin {
     private static final Logger LOG = LoggerFactory.getLogger("morefirework:rocket");
 
-    // Track entities directly hit by THIS rocket so they don't get double effects
-    private final Set<UUID> directlyHitEntities = new HashSet<>();
+    @Shadow
+    private void explode() {}
 
-    @Inject(method = "tick", at = @At("HEAD"))
+    // One-shot flag: Gold proxy fuse must only trigger once per rocket lifetime
+    private boolean hasExploded = false;
+
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void morefirework$seekerTick(CallbackInfo ci) {
         FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         ItemStack stack = self.getStack();
@@ -40,30 +41,27 @@ public class FireworkRocketEntityMixin {
             LOG.debug("Seeker tick — entity={}, pos=({},{},{})", 
                 self.getId(), (int)self.getX(), (int)self.getY(), (int)self.getZ());
         }
+
+        // Gold proxy fuse: check if within 3.5 blocks of any target — ONE SHOT ONLY
+        if (!hasExploded && stack.getItem() instanceof OreFireworkItem oreItem && oreItem.getOreType() == OreFireworkItem.OreType.GOLD) {
+            if (!self.getWorld().isClient) {
+                Box box = self.getBoundingBox().expand(3.5);
+                List<LivingEntity> targets = self.getWorld().getEntitiesByClass(LivingEntity.class, box,
+                    e -> e != self.getOwner() && e.isAlive());
+                if (!targets.isEmpty()) {
+                    hasExploded = true;
+                    this.explode();
+                    ci.cancel();
+                    return;
+                }
+            }
+        }
+
         SeekerBehavior.tick(self);
-    }
-
-    /** Direct entity collision — apply ore effect */
-    @Inject(method = "onEntityHit", at = @At("HEAD"))
-    private void morefirework$onEntityHit(EntityHitResult hitResult, CallbackInfo ci) {
-        Entity target = hitResult.getEntity();
-        if (!(target instanceof LivingEntity livingTarget)) return;
-        if (livingTarget.getWorld().isClient) return;
-
-        FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
-        ItemStack rocket = self.getStack();
-        if (!(rocket.getItem() instanceof OreFireworkItem oreItem)) return;
-
-        // Track this entity so the AOE explosion doesn't hit it again
-        directlyHitEntities.add(target.getUuid());
-
-        applyOreEffect(livingTarget, oreItem.getOreType(), self);
     }
 
     /**
      * Hook AFTER the vanilla explosion to apply AOE effects.
-     * Fireworks that expire mid-flight or hit blocks explode without
-     * triggering onEntityHit — this catches those cases.
      */
     @Inject(method = "explode", at = @At("TAIL"))
     private void morefirework$explodeAoeEffect(CallbackInfo ci) {
@@ -100,9 +98,6 @@ public class FireworkRocketEntityMixin {
             if (!(entity instanceof LivingEntity livingTarget)) continue;
             if (livingTarget.getWorld().isClient) continue;
 
-            // Skip entities that were already hit directly by onEntityHit
-            if (directlyHitEntities.remove(livingTarget.getUuid())) continue;
-
             double dist = livingTarget.getPos().distanceTo(self.getPos());
             if (dist > radius) continue;
 
@@ -126,25 +121,25 @@ public class FireworkRocketEntityMixin {
 
         switch (type) {
             case DIAMOND -> {
-                EquipmentSlot[] armorSlots = {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
-                    EquipmentSlot.LEGS, EquipmentSlot.FEET};
-                EquipmentSlot marked = armorSlots[random.nextInt(4)];
-                fx.markDiamond(marked);
-                LOG.info("  DIAMOND — marked: {}", marked.getName());
+                // Target sequential pattern: CHEST -> LEGS -> HEAD -> FEET
+                EquipmentSlot nextSlot = fx.getNextDiamondTarget();
+                if (nextSlot != null) {
+                    fx.markDiamond(nextSlot);
+                    LOG.info("  DIAMOND — marked slot: {}", nextSlot.getName());
+                } else {
+                    LOG.info("  DIAMOND — all slots already marked");
+                }
             }
             case IRON -> {
-                EquipmentSlot[] slots = shuffledArmorSlots(random);
-                for (int i = 0; i < 4; i++) fx.addBleed(slots[i % slots.length], 1);
+                // Apply 4 stacks unevenly: CHEST (highest) -> LEGS -> HEAD -> FEET (lowest)
+                applyWeightedStack(fx, "IRON", worldTime, random, 4);
                 LOG.info("  IRON — bleed stacks: {}", fx.getTotalBleed());
             }
             case AMETHYST -> {
                 if (fx.isCrystalizedImmune(worldTime)) break;
-                for (int i = 0; i < 2; i++) {
-                    EquipmentSlot slot = rollFractureSlot(random);
-                    fx.addFracture(slot, 1);
-                    if (fx.getFracture(slot) >= 4) fx.setFractured(slot, true);
-                }
-                LOG.info("  AMETHYST — fractured pieces: {}", fx.countFractured());
+                // Apply 6 stacks unevenly: CHEST (highest) -> LEGS -> HEAD -> FEET (lowest)
+                applyWeightedStack(fx, "AMETHYST", worldTime, random, 6);
+                LOG.info("  AMETHYST — fractured slots active: {}", fx.countFractured(worldTime));
             }
             case EMERALD -> {
                 fx.addEmeraldHit(worldTime);
@@ -160,21 +155,38 @@ public class FireworkRocketEntityMixin {
         }
     }
 
-    private static EquipmentSlot[] shuffledArmorSlots(Random rng) {
-        EquipmentSlot[] all = {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
-            EquipmentSlot.LEGS, EquipmentSlot.FEET};
-        for (int i = all.length - 1; i > 0; i--) {
-            int j = rng.nextInt(i + 1);
-            EquipmentSlot tmp = all[i]; all[i] = all[j]; all[j] = tmp;
-        }
-        return all;
-    }
+    private static void applyWeightedStack(FireworkEffectComponent fx, String type, long worldTime, Random random, int count) {
+        // Weights: CHEST=40, LEGS=30, HEAD=20, FEET=10
+        EquipmentSlot[] slots = {EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.HEAD, EquipmentSlot.FEET};
+        int[] weights = {40, 30, 20, 10};
 
-    private static EquipmentSlot rollFractureSlot(Random rng) {
-        int roll = rng.nextInt(100);
-        if (roll < 15) return EquipmentSlot.HEAD;
-        if (roll < 55) return EquipmentSlot.CHEST;
-        if (roll < 90) return EquipmentSlot.LEGS;
-        return EquipmentSlot.FEET;
+        for (int c = 0; c < count; c++) {
+            List<Integer> eligibleIndices = new ArrayList<>();
+            int totalWeight = 0;
+            for (int i = 0; i < slots.length; i++) {
+                int currentStacks = type.equals("IRON") ? fx.getBleed(slots[i]) : fx.getFracture(slots[i]);
+                if (currentStacks < 6) {
+                    eligibleIndices.add(i);
+                    totalWeight += weights[i];
+                }
+            }
+
+            if (totalWeight > 0) {
+                int roll = random.nextInt(totalWeight);
+                int cumulative = 0;
+                for (int idx : eligibleIndices) {
+                    cumulative += weights[idx];
+                    if (cumulative > roll) {
+                        EquipmentSlot chosen = slots[idx];
+                        if (type.equals("IRON")) {
+                            fx.addBleed(chosen, 1);
+                        } else {
+                            fx.addFracture(chosen, 1, worldTime);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

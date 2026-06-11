@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.function.Predicate;
 
 @Mixin(CrossbowItem.class)
-public class    CrossbowItemMixin {
+public class CrossbowItemMixin {
 
     /**
      * Accept OreFireworkItem as crossbow ammo in addition to vanilla fireworks.
@@ -69,6 +69,17 @@ public class    CrossbowItemMixin {
             );
             rocket.setOwner(shooter);
             cir.setReturnValue(rocket);
+        }
+    }
+
+    @Inject(method = "getPullTime(Lnet/minecraft/item/ItemStack;Lnet/minecraft/entity/LivingEntity;)I", at = @At("RETURN"), cancellable = true)
+    private static void morefirework$modifyPullTime(ItemStack stack, LivingEntity user, CallbackInfoReturnable<Integer> cir) {
+        if (user != null) {
+            ItemStack projectile = user.getProjectileType(stack);
+            if (!projectile.isEmpty() && projectile.getItem() instanceof OreFireworkItem && OreFireworkItem.hasRedstone(projectile)) {
+                int basePullTime = cir.getReturnValue();
+                cir.setReturnValue(basePullTime + 20); // 1-second longer reload
+            }
         }
     }
 }

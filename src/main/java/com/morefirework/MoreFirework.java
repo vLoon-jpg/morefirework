@@ -26,6 +26,12 @@ public class MoreFirework implements ModInitializer {
         Identifier.of(MOD_ID, "morefirework_group")
     );
 
+    public static final net.minecraft.recipe.RecipeSerializer<com.morefirework.recipe.OreFireworkRecipe> ORE_FIREWORK_SERIALIZER = Registry.register(
+        Registries.RECIPE_SERIALIZER,
+        Identifier.of(MOD_ID, "ore_firework"),
+        new net.minecraft.recipe.SpecialRecipeSerializer<>(com.morefirework.recipe.OreFireworkRecipe::new)
+    );
+
     @Override
     public void onInitialize() {
         LOGGER.info("More Firework — combat reimagined.");

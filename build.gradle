@@ -42,3 +42,18 @@ jar {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
 }
+
+tasks.register("printRecipeInputInfo") {
+    doLast {
+        try {
+            def clazz = Class.forName("net.minecraft.recipe.input.CraftingRecipeInput")
+            println("=== METHODS OF CraftingRecipeInput ===")
+            for (def m : clazz.getDeclaredMethods()) {
+                println("METHOD: " + m.getName() + " -> " + m.getReturnType())
+            }
+            println("=== END ===")
+        } catch (Exception e) {
+            e.printStackTrace()
+        }
+    }
+}

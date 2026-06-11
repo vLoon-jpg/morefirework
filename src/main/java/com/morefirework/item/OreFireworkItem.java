@@ -38,6 +38,12 @@ public class OreFireworkItem extends FireworkRocketItem {
         ComponentType.<String>builder().codec(Codec.STRING).build()
     );
 
+    public static final ComponentType<Integer> DURABILITY_PENALTY = Registry.register(
+        Registries.DATA_COMPONENT_TYPE,
+        MoreFirework.id("durability_penalty"),
+        ComponentType.<Integer>builder().codec(Codec.INT).build()
+    );
+
     public OreFireworkItem(OreType oreType) {
         super(new Item.Settings().maxCount(16));
         this.oreType = oreType;

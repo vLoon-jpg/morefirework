@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:smelting",
+  "ingredient": { "item": "minecraft:diamond" },
+  "result": { "id": "morefirework:diamond_ingot" },
+  "experience": 0.7,
+  "cookingtime": 200
+}
