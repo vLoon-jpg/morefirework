@@ -75,10 +75,45 @@ public abstract class FireworkRocketEntityMixin {
                 // Reset life counter so vanilla never explodes this rocket on its own
                 this.life = 0;
 
-                // Run seeker behavior manually
+                // Launch phase: fly straight up for 30 ticks before homing kicks in
+                if (data.flightTicks < 30) {
+                    Vec3d upVel = new Vec3d(0, 0.4, 0); // shoot up like a real firework
+                    self.setVelocity(upVel);
+                    Vec3d end2 = self.getPos().add(upVel);
+                    BlockHitResult bh2 = self.getWorld().raycast(new RaycastContext(
+                        self.getPos(), end2,
+                        RaycastContext.ShapeType.COLLIDER,
+                        RaycastContext.FluidHandling.NONE, self));
+                    if (bh2.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
+                        SeekerData.remove(self);
+                        self.setPosition(bh2.getPos().x, bh2.getPos().y, bh2.getPos().z);
+                        explode(); self.discard(); ci.cancel(); return;
+                    }
+                    self.setPosition(end2.x, end2.y, end2.z);
+                    data.flightTicks++; // manually tick so SeekerBehavior.tick() startup delay counts
+                    self.velocityDirty = true;
+                    ci.cancel();
+                    return;
+                }
+
+                // Homing phase: run seeker behavior
                 SeekerBehavior.tick(self);
 
-                // Move the rocket ourselves — raycast first to detect block collisions
+                // Check entity collision — if touching assigned target, explode
+                if (!self.getWorld().isClient) {
+                    Box hitBox = self.getBoundingBox().expand(0.5);
+                    List<LivingEntity> touching = self.getWorld().getEntitiesByClass(LivingEntity.class, hitBox,
+                        e -> e.isAlive() && (data.assignedTargetId == -1 || e.getId() == data.assignedTargetId));
+                    if (!touching.isEmpty()) {
+                        SeekerData.remove(self);
+                        explode();
+                        self.discard();
+                        ci.cancel();
+                        return;
+                    }
+                }
+
+                // Move the rocket — raycast for block collisions
                 Vec3d vel = self.getVelocity();
                 Vec3d start = self.getPos();
                 Vec3d end = start.add(vel);
