@@ -192,6 +192,29 @@ public class SeekerBehavior {
             }
 
             if (lastTarget instanceof LivingEntity && lastTarget.isAlive() && data.lastTargetPos != null) {
+                // Check if there's a better target in the cone before continuing the chase
+                // Heat targets always interrupt. Cold targets only interrupt if the chased target is cold too.
+                LivingEntity chased = (LivingEntity) lastTarget;
+                int chasedHeat = ModComponents.get(chased).getEmeraldLevel(world.getTime());
+                if (chasedHeat == 0) {
+                    // Chased target is cold — check if a new target entered the cone
+                    LivingEntity betterTarget = findTargetInVisionCone(world, rocket);
+                    if (betterTarget != null && betterTarget != chased) {
+                        // Found a new target — switch to it
+                        if (data.assignedTargetId != -1) SeekerData.releaseTarget(data.assignedTargetId);
+                        data.assignedTargetId = betterTarget.getId();
+                        data.lastTargetId = betterTarget.getId();
+                        data.lastTargetPos = betterTarget.getPos().add(0, betterTarget.getHeight() / 2, 0);
+                        SeekerData.claimTarget(betterTarget.getId());
+                        data.lostTicks = 0;
+                        // Apply steering toward new target this tick
+                        Vec3d newDir2 = slerp(rocket.getVelocity().normalize(),
+                            data.lastTargetPos.subtract(rocket.getPos()).normalize(), TURN_RATE_HUNTING);
+                        rocket.setVelocity(newDir2.multiply(Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0)));
+                        return true;
+                    }
+                }
+
                 // Smart prediction: update last target position if they are still alive
                 data.lastTargetPos = lastTarget.getPos().add(0, lastTarget.getHeight() / 2, 0);
 
