@@ -114,10 +114,32 @@ public class SeekerBehavior {
             data.lostTicks = 0;
 
             // Locked on: accelerate toward LOCKED_MAX_SPEED, reduce turn rate as speed climbs
-            // Turn rate inversely scales with speed: fast = committed, can't snap turn
             int emeraldLevel = ModComponents.get(activeTarget).getEmeraldLevel(worldTime);
-            double newSpeed = Math.min(LOCKED_MAX_SPEED, currentSpeed + ACCELERATION / 20.0);
-            // Turn rate: lerp from HUNTING (slow) to LOCKED_MIN (fast) based on speed fraction
+
+            // Measure closing speed: positive = rocket closing in, negative = target pulling away
+            Vec3d toTargetVec = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0).subtract(rocket.getPos());
+            double distToTarget = toTargetVec.length();
+            Vec3d toTargetDir2 = distToTarget > 0 ? toTargetVec.normalize() : new Vec3d(0,1,0);
+            // Project rocket velocity onto the to-target direction
+            double rocketClosingSpeed = rocket.getVelocity().dotProduct(toTargetDir2);
+            // Project target velocity onto same direction (away from rocket = positive)
+            double targetFleeSeed = activeTarget.getVelocity().dotProduct(toTargetDir2);
+            // closingDelta > 0 means target is outrunning rocket
+            double closingDelta = targetFleeSeed - rocketClosingSpeed;
+
+            double newSpeed;
+            if (closingDelta > 0) {
+                // Target is faster — accelerate step by step until we close the gap
+                // Max speed = target speed + walking pace (0.13 b/t) so it always eventually catches up
+                double targetSpeed = activeTarget.getVelocity().length();
+                double speedCap = Math.min(LOCKED_MAX_SPEED, targetSpeed + 0.13);
+                newSpeed = Math.min(speedCap, currentSpeed + ACCELERATION / 20.0);
+            } else {
+                // Already faster than or equal to target — hold current speed, no further accel
+                newSpeed = currentSpeed;
+            }
+
+            // Turn rate: inversely scales with speed — faster = more committed
             double speedFraction = Math.min(1.0, newSpeed / LOCKED_MAX_SPEED);
             double turnRate = TURN_RATE_HUNTING - (TURN_RATE_HUNTING - TURN_RATE_LOCKED_MIN) * speedFraction;
             turnRate *= emeraldMultiplier(emeraldLevel);
