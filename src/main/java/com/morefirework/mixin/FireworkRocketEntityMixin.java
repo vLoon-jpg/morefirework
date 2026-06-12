@@ -13,6 +13,9 @@ import net.minecraft.entity.projectile.FireworkRocketEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.world.RaycastContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
@@ -75,9 +78,26 @@ public abstract class FireworkRocketEntityMixin {
                 // Run seeker behavior manually
                 SeekerBehavior.tick(self);
 
-                // Move the rocket ourselves using its current velocity (no vanilla upward boost)
+                // Move the rocket ourselves — raycast first to detect block collisions
                 Vec3d vel = self.getVelocity();
-                self.setPosition(self.getX() + vel.x, self.getY() + vel.y, self.getZ() + vel.z);
+                Vec3d start = self.getPos();
+                Vec3d end = start.add(vel);
+                BlockHitResult blockHit = self.getWorld().raycast(new RaycastContext(
+                    start, end,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE,
+                    self
+                ));
+                if (blockHit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
+                    // Hit a block — explode at the hit position
+                    SeekerData.remove(self);
+                    self.setPosition(blockHit.getPos().x, blockHit.getPos().y, blockHit.getPos().z);
+                    explode();
+                    self.discard();
+                    ci.cancel();
+                    return;
+                }
+                self.setPosition(end.x, end.y, end.z);
                 self.velocityDirty = true;
 
                 ci.cancel();
