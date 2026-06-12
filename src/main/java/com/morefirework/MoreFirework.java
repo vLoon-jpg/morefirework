@@ -49,6 +49,13 @@ public class MoreFirework implements ModInitializer {
         ModEffects.register();
         ModComponents.register();
 
+        // Periodic cleanup of stale claim counts every 200 ticks (~10s)
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (server.getTicks() % 200 == 0) {
+                SeekerBehavior.SeekerData.purgeStaleEntries();
+            }
+        });
+
         Registry.register(Registries.ITEM_GROUP, ITEM_GROUP,
             FabricItemGroup.builder()
                 .displayName(Text.literal("More Firework"))

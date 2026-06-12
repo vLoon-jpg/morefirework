@@ -468,6 +468,19 @@ public class SeekerBehavior {
             TRACKER.remove(rocket.getId());
         }
 
+        /**
+         * Periodic cleanup: remove CLAIM_COUNTS entries for entity IDs that no longer
+         * exist in any active TRACKER entry. Call this occasionally to prevent stale counts
+         * from blocking future rockets.
+         */
+        public static void purgeStaleEntries() {
+            java.util.Set<Integer> active = new java.util.HashSet<>();
+            for (SeekerData d : TRACKER.values()) {
+                if (d.assignedTargetId != -1) active.add(d.assignedTargetId);
+            }
+            CLAIM_COUNTS.keySet().retainAll(active);
+        }
+
         public static void releaseTarget(int entityId) {
             CLAIM_COUNTS.merge(entityId, -1, Integer::sum);
             CLAIM_COUNTS.remove(entityId, 0);

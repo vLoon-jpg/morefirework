@@ -43,16 +43,21 @@ public abstract class FireworkRocketEntityMixin {
         FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         ItemStack stack = self.getStack();
 
-        // Gold proxy fuse: check if within 3.5 blocks of any target — ONE SHOT ONLY
-        // Skip during launch phase so placed gold rockets don't detonate at the player's feet
+        // Gold proxy fuse: SMART — if this is a seeker, close to within 1 block before detonating.
+        // Non-seeker gold rockets use the original 3.5-block fuse.
+        // Skip during launch phase.
         boolean inLaunchPhase = false;
-        if (OreFireworkItem.hasRedstone(stack)) {
+        boolean isSeeker = OreFireworkItem.hasRedstone(stack);
+        if (isSeeker) {
             SeekerData launchCheck = SeekerBehavior.SeekerData.getOrCreate(self);
             inLaunchPhase = launchCheck.placedOrDispensed && launchCheck.flightTicks < 30;
         }
         if (!inLaunchPhase && !hasExploded && stack.getItem() instanceof OreFireworkItem oreItem && oreItem.getOreType() == OreFireworkItem.OreType.GOLD) {
             if (!self.getWorld().isClient) {
-                Box box = self.getBoundingBox().expand(3.5);
+                // Seeker gold: only detonate within 1 block for maximum damage
+                // Non-seeker gold: original 3.5-block fuse
+                double fuseRadius = isSeeker ? 1.0 : 3.5;
+                Box box = self.getBoundingBox().expand(fuseRadius);
                 List<LivingEntity> targets = self.getWorld().getEntitiesByClass(LivingEntity.class, box,
                     e -> e != self.getOwner() && e.isAlive());
                 if (!targets.isEmpty()) {
