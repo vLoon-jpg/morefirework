@@ -9,6 +9,7 @@ import net.minecraft.item.CrossbowItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.world.World;
+import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.injection.At;
@@ -68,6 +69,14 @@ public class CrossbowItemMixin {
                 true
             );
             rocket.setOwner(shooter);
+            // For seeker rockets: clamp initial velocity to walking pace so SeekerBehavior controls speed
+            if (OreFireworkItem.hasRedstone(projectileStack)) {
+                Vec3d vel = rocket.getVelocity();
+                double len = vel.length();
+                if (len > 0.13) {
+                    rocket.setVelocity(vel.normalize().multiply(0.13));
+                }
+            }
             cir.setReturnValue(rocket);
         }
     }
