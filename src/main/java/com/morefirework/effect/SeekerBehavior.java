@@ -259,7 +259,7 @@ public class SeekerBehavior {
                 if (!canSee(world, rocket, e)) return false;
 
                 // Check if target is in 120-degree forward vision cone (60-degree half-angle)
-                // All seekers lock onto any living entity — no heat requirement
+                // All seekers lock onto any living entity — no heat requirement for initial filter
                 Vec3d forward = rocket.getVelocity().normalize();
                 Vec3d toTarget = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
                 double dot = forward.dotProduct(toTarget);
@@ -269,13 +269,33 @@ public class SeekerBehavior {
 
         if (candidates.isEmpty()) return null;
 
-        // Lock on to target nearest to the center of the cone (largest dot product)
         Vec3d forward = rocket.getVelocity().normalize();
+        long worldTime = world.getTime();
+
+        // Priority: if any candidate has an emerald heat signature, pick the HIGHEST heat level
+        // regardless of how many rockets are already targeting them.
+        // Otherwise fall back to least-contested (fewest rockets assigned).
+        LivingEntity hottestTarget = null;
+        int maxHeat = 0;
+        for (LivingEntity e : candidates) {
+            int heat = ModComponents.get(e).getEmeraldLevel(worldTime);
+            if (heat > maxHeat) {
+                maxHeat = heat;
+                hottestTarget = e;
+            }
+        }
+        if (hottestTarget != null) return hottestTarget;
+
+        // No heat signatures — lock onto target nearest to the center of the cone (largest dot product)
         return candidates.stream()
-            .max((e1, e2) -> {
+            .min((e1, e2) -> {
+                // Prefer least contested, break ties by cone-center alignment
+                int c1 = SeekerData.getClaimCount(e1.getId());
+                int c2 = SeekerData.getClaimCount(e2.getId());
+                if (c1 != c2) return Integer.compare(c1, c2);
                 Vec3d toE1 = e1.getPos().add(0, e1.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
                 Vec3d toE2 = e2.getPos().add(0, e2.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
-                return Double.compare(forward.dotProduct(toE1), forward.dotProduct(toE2));
+                return Double.compare(forward.dotProduct(toE2), forward.dotProduct(toE1));
             })
             .orElse(null);
     }
