@@ -127,6 +127,32 @@ public class ModEffects {
                                 if (hasAny) {
                                     player.sendMessage(Text.literal(sb.toString()), true);
                                 }
+
+                                // Spawn subtle sparkle particles on diamond-marked armor pieces
+                                for (EquipmentSlot slot : EquipmentSlot.values()) {
+                                    if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR 
+                                        && fx.isDiamondMarked(slot) 
+                                        && !fx.isStabImmune(slot, worldTime)) {
+                                        double px = player.getX() + (player.getRandom().nextDouble() - 0.5) * 0.6;
+                                        double py = player.getY() + switch (slot) {
+                                            case HEAD -> 1.6;
+                                            case CHEST -> 1.2;
+                                            case LEGS -> 0.8;
+                                            case FEET -> 0.2;
+                                            default -> 1.0;
+                                        } + player.getRandom().nextDouble() * 0.3;
+                                        double pz = player.getZ() + (player.getRandom().nextDouble() - 0.5) * 0.6;
+                                        if (player.getWorld() instanceof net.minecraft.server.world.ServerWorld serverWorld) {
+                                            serverWorld.spawnParticles(
+                                                net.minecraft.particle.ParticleTypes.ENCHANT,
+                                                px, py, pz,
+                                                1,
+                                                0.0, -0.05, 0.0,
+                                                0.0
+                                            );
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

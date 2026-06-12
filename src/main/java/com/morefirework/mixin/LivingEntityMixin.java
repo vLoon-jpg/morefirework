@@ -27,6 +27,59 @@ public class LivingEntityMixin {
         return ModEffects.onDamageReceived(self, amount);
     }
 
+    @Inject(method = "damage", at = @At("HEAD"), cancellable = true)
+    private void morefirework$damageHead(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        long worldTime = self.getWorld().getTime();
+
+        // 1. Cancel thorns damage if the defender has thorns blocked (diamond mark hit recently)
+        if (source.isOf(net.minecraft.entity.damage.DamageTypes.THORNS)) {
+            net.minecraft.entity.Entity attacker = source.getSource();
+            if (attacker instanceof LivingEntity defender) {
+                FireworkEffectComponent defFx = ModComponents.get(defender);
+                if (defFx.isThornsBlocked(worldTime)) {
+                    cir.setReturnValue(false);
+                    return;
+                }
+            }
+        }
+
+        // 2. Set the ignoring flag if we have active diamond marks
+        if (!source.isIn(net.minecraft.registry.tag.DamageTypeTags.BYPASSES_ARMOR)) {
+            FireworkEffectComponent fx = ModComponents.get(self);
+            boolean hasMark = false;
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
+                if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR && fx.isDiamondMarked(slot) && !fx.isStabImmune(slot, worldTime)) {
+                    hasMark = true;
+                    break;
+                }
+            }
+            if (hasMark) {
+                fx.setIgnoringMarkedArmor(true);
+            }
+        }
+    }
+
+    @Inject(method = "damage", at = @At("RETURN"))
+    private void morefirework$damageReturn(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        FireworkEffectComponent fx = ModComponents.get(self);
+        if (fx.isIgnoringMarkedArmor()) {
+            // Only clear diamond marks if the damage actually succeeded
+            if (Boolean.TRUE.equals(cir.getReturnValue())) {
+                long worldTime = self.getWorld().getTime();
+                for (EquipmentSlot slot : EquipmentSlot.values()) {
+                    if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR) {
+                        if (fx.isDiamondMarked(slot) && !fx.isStabImmune(slot, worldTime)) {
+                            fx.clearDiamondMark(slot);
+                        }
+                    }
+                }
+            }
+            fx.setIgnoringMarkedArmor(false);
+        }
+    }
+
     @Inject(method = "applyArmorToDamage(Lnet/minecraft/entity/damage/DamageSource;F)F", at = @At("HEAD"), cancellable = true)
     private void morefirework$applyArmorToDamage(DamageSource source, float amount, CallbackInfoReturnable<Float> cir) {
         if (source.isIn(net.minecraft.registry.tag.DamageTypeTags.BYPASSES_ARMOR)) return;
@@ -73,16 +126,8 @@ public class LivingEntityMixin {
             // Calculate damage left with the ignored armor/toughness values
             float damageLeft = DamageUtil.getDamageLeft(self, amount, source, (float) totalArmor, (float) totalToughness);
 
-            // Consume the marks that contributed to this hit
-            for (EquipmentSlot slot : EquipmentSlot.values()) {
-                if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
-                if (fx.isDiamondMarked(slot) && !fx.isStabImmune(slot, worldTime)) {
-                    ItemStack armorStack = self.getEquippedStack(slot);
-                    if (!armorStack.isEmpty()) {
-                        fx.clearDiamondMark(slot);
-                    }
-                }
-            }
+            // Block thorns for this entity for the current hit
+            fx.blockThorns(worldTime, 2);
 
             cir.setReturnValue(damageLeft);
         }

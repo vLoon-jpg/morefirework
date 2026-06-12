@@ -1,11 +1,13 @@
 {
   "required": true,
   "package": "com.morefirework.mixin",
+  "refmap": "morefirework-refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "CrossbowItemMixin",
     "FireworkRocketEntityMixin",
     "LivingEntityMixin",
+    "LivingEntityArmorMixin",
     "PlayerEntityMixin",
     "PlayerDataMixin",
     "ProjectileEntityMixin",

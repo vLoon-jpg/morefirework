@@ -3,6 +3,7 @@ package com.morefirework.component;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.math.Vec3d;
 import java.util.*;
 
 /**
@@ -24,17 +25,28 @@ public class FireworkEffectComponent {
     private final Map<EquipmentSlot, Boolean> diamondMarked = new HashMap<>();
     private final Map<EquipmentSlot, Long> stabImmunityUntil = new HashMap<>();
 
-    // --- Heat Signature (Emerald) ---
+    // --- Emerald === Heat Signature === (Tracking) ---
     private int emeraldLevel = 0;
     private long emeraldExpiry = 0;
+    private int lastTargetId = -1;
+    private Vec3d lastTargetPos = null;
 
-    // --- Stun (Crystalized) ---
+    // === Stun (Crystalized) ===
     private boolean stunned = false;
     private long stunnedUntil = 0;
     private long armorReductionUntil = 0;
 
     // --- Brush Timer ---
     private int brushingTicks = 0;
+
+    // --- Thorns Blocked ---
+    private long thornsBlockedUntil = 0;
+
+    // --- Transient Combat Flags ---
+    private boolean ignoringMarkedArmor = false;
+
+    public boolean isIgnoringMarkedArmor() { return ignoringMarkedArmor; }
+    public void setIgnoringMarkedArmor(boolean flag) { this.ignoringMarkedArmor = flag; }
 
     // === Persistence ===
 
@@ -161,6 +173,13 @@ public class FireworkEffectComponent {
     public void addEmeraldHit(long worldTime) { emeraldLevel = Math.min(3, emeraldLevel + 1); emeraldExpiry = worldTime + 9600; } // 8 minutes
     public int getEmeraldLevel(long worldTime) { if (worldTime > emeraldExpiry) emeraldLevel = 0; return emeraldLevel; }
     public boolean hasEmeraldMark(long worldTime) { return getEmeraldLevel(worldTime) > 0; }
+    public void setLastTarget(int id, Vec3d pos) { this.lastTargetId = id; this.lastTargetPos = pos; }
+    public int getLastTargetId() { return lastTargetId; }
+    public Vec3d getLastTargetPos() { return lastTargetPos; }
+
+    // === Thorns Blocked ===
+    public boolean isThornsBlocked(long worldTime) { return worldTime < thornsBlockedUntil; }
+    public void blockThorns(long worldTime, int durationTicks) { thornsBlockedUntil = worldTime + durationTicks; }
 
     // === Stun ===
     public boolean isStunned(long worldTime) { if (stunned && worldTime > stunnedUntil) stunned = false; return stunned; }

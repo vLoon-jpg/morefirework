@@ -21,10 +21,10 @@ public class GoldShotgun {
 
     private static final Logger LOG = LoggerFactory.getLogger("morefirework:shotgun");
 
-    private static final int SHRAPNEL_COUNT = 8;
+    private static final int SHRAPNEL_COUNT = 12;
     private static final float CONE_ANGLE = 60.0f; // degrees total
     private static final double RANGE = 5.0;
-    private static final float DAMAGE_PER_SHRAPNEL = 8.0f; // 4 hearts (8 HP)
+    private static final float DAMAGE_PER_SHRAPNEL = 8.0f;  // 4 hearts
     private static final float KNOCKBACK_STRENGTH = 1.5f;
 
     public static void shatter(World world, Vec3d impactPos, Vec3d direction, Entity shooter) {
@@ -67,12 +67,12 @@ public class GoldShotgun {
             float baseDamage = DAMAGE_PER_SHRAPNEL * shrapnelHitting;
 
             // Deal more damage to unarmored targets (up to 2.0x base damage at 0 armor)
-            float armorFactor = 1.0f + 1.0f * (1.0f - (Math.min(20, target.getArmor()) / 20.0f));
+            float armorFactor = 1.0f + 0.5f * (1.0f - (Math.min(20, target.getArmor()) / 20.0f));
             float totalDamage = baseDamage * armorFactor;
 
             // Shields partially block (50% reduction)
             ItemStack offhand = target.getOffHandStack();
-            boolean hasShield = offhand.getItem().toString().contains("shield");
+            boolean hasShield = !offhand.isEmpty() && offhand.getItem() instanceof net.minecraft.item.ShieldItem;
             if (hasShield) {
                 totalDamage *= 0.5f;
                 offhand.damage(20 * shrapnelHitting, target, EquipmentSlot.OFFHAND);

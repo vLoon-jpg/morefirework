@@ -52,11 +52,20 @@ public class MoreFirework implements ModInitializer {
             entries.add(ModItems.DIAMOND_INGOT);
             entries.add(ModItems.AMETHYST_INGOT);
             entries.add(ModItems.REDSTONE_ADDON);
+            
+            // Standard Ore Rockets
             entries.add(ModItems.DIAMOND_FIREWORK.getDefaultStack());
             entries.add(ModItems.IRON_FIREWORK.getDefaultStack());
             entries.add(ModItems.GOLD_FIREWORK.getDefaultStack());
             entries.add(ModItems.EMERALD_FIREWORK.getDefaultStack());
             entries.add(ModItems.AMETHYST_FIREWORK.getDefaultStack());
+
+            // Seeker (Redstoned) Ore Rockets
+            entries.add(com.morefirework.item.OreFireworkItem.setRedstone(ModItems.DIAMOND_FIREWORK.getDefaultStack(), true));
+            entries.add(com.morefirework.item.OreFireworkItem.setRedstone(ModItems.IRON_FIREWORK.getDefaultStack(), true));
+            entries.add(com.morefirework.item.OreFireworkItem.setRedstone(ModItems.GOLD_FIREWORK.getDefaultStack(), true));
+            entries.add(com.morefirework.item.OreFireworkItem.setRedstone(ModItems.EMERALD_FIREWORK.getDefaultStack(), true));
+            entries.add(com.morefirework.item.OreFireworkItem.setRedstone(ModItems.AMETHYST_FIREWORK.getDefaultStack(), true));
         });
 
         LOGGER.info("More Firework initialized successfully.");

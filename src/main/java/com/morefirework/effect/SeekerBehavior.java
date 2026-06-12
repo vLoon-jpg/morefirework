@@ -47,15 +47,61 @@ public class SeekerBehavior {
         SeekerData data = SeekerData.getOrCreate(rocket);
         data.flightTicks++;
 
-        // Calculate turning rate which degrades over time (harder to turn)
-        // Starts at 20 degrees/tick, drops to 2 degrees/tick by 9s
-        double turnRate = Math.max(Math.toRadians(2), Math.toRadians(20) - (data.flightTicks / 20.0) * Math.toRadians(2));
+        // Calculate turning rate which smoothly ramps up then degrades over time (avoid snapping at start)
+        double turnRate;
+        if (data.flightTicks < 30) {
+            // Smoothly ramp up turning capability from 2 to 8 degrees/tick during the first second of flight (tick 10 to 30)
+            double pct = Math.min(1.0, Math.max(0.0, (data.flightTicks - 10) / 20.0));
+            turnRate = Math.toRadians(2 + pct * 6);
+        } else {
+            // Degrade turning capability after peak (tick 30) down to 2 degrees/tick by 9 seconds (tick 180)
+            double pct = Math.min(1.0, Math.max(0.0, (data.flightTicks - 30) / 150.0));
+            turnRate = Math.toRadians(8 - pct * 6);
+        }
+
+        // Spawn menacing/sinister particle trail
+        if (world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
+            double rx = rocket.getX();
+            double ry = rocket.getY() + 0.15;
+            double rz = rocket.getZ();
+
+            // Ominous trial spawner detection particles
+            serverWorld.spawnParticles(
+                net.minecraft.particle.ParticleTypes.TRIAL_SPAWNER_DETECTION_OMINOUS,
+                rx, ry, rz,
+                2,
+                0.1, 0.1, 0.1,
+                0.02
+            );
+
+            // Angry Villager (stormy red crosses)
+            if (data.flightTicks % 2 == 0) {
+                serverWorld.spawnParticles(
+                    net.minecraft.particle.ParticleTypes.ANGRY_VILLAGER,
+                    rx, ry, rz,
+                    1,
+                    0.2, 0.2, 0.2,
+                    0.0
+                );
+            }
+
+            // Soul Fire Flame (sinister blue-green jet flame)
+            serverWorld.spawnParticles(
+                net.minecraft.particle.ParticleTypes.SOUL_FIRE_FLAME,
+                rx, ry, rz,
+                1,
+                0.05, 0.05, 0.05,
+                0.01
+            );
+        }
 
         // Find nearest Emerald-marked target in our vision cone with line-of-sight
         LivingEntity activeTarget = findTargetInVisionCone(world, rocket);
 
         if (activeTarget != null) {
             // We have a direct lock-on target!
+            boolean justLockedOn = !data.wasLockedOn;
+            data.wasLockedOn = true;
             data.lastTargetId = activeTarget.getId();
             data.lastTargetPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
             data.lostTicks = 0;
@@ -70,10 +116,43 @@ public class SeekerBehavior {
             Vec3d targetCenterPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
             Vec3d toTarget = targetCenterPos.subtract(rocket.getPos()).normalize();
 
+            // Play lock-on warning sounds at the target player
+            if (justLockedOn) {
+                world.playSound(null, activeTarget.getX(), activeTarget.getY(), activeTarget.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_TRIAL_SPAWNER_DETECT_PLAYER, net.minecraft.sound.SoundCategory.PLAYERS, 1.5f, 0.8f);
+
+                // Play lock-on confirmation sound for the attacker (shooter)
+                net.minecraft.entity.Entity owner = rocket.getOwner();
+                if (owner instanceof net.minecraft.entity.player.PlayerEntity playerOwner) {
+                    playerOwner.getWorld().playSound(null, playerOwner.getX(), playerOwner.getY(), playerOwner.getZ(),
+                        net.minecraft.sound.SoundEvents.BLOCK_TRIAL_SPAWNER_DETECT_PLAYER, net.minecraft.sound.SoundCategory.PLAYERS, 1.0f, 1.4f);
+                }
+            }
+
+            // Dynamic homing warning beep that speeds up as the rocket gets closer
+            double dist = rocket.getPos().distanceTo(activeTarget.getPos());
+            int beepInterval = dist > 30 ? 20 : (dist > 15 ? 10 : (dist > 5 ? 5 : 2));
+            if (data.flightTicks % beepInterval == 0) {
+                world.playSound(null, activeTarget.getX(), activeTarget.getY(), activeTarget.getZ(),
+                    net.minecraft.sound.SoundEvents.BLOCK_NOTE_BLOCK_PLING, net.minecraft.sound.SoundCategory.PLAYERS, 0.8f, 1.8f);
+            }
+
+            // Extra dragon breath trails during active lock-on homing
+            if (world instanceof net.minecraft.server.world.ServerWorld serverWorld && data.flightTicks % 3 == 0) {
+                serverWorld.spawnParticles(
+                    net.minecraft.particle.ParticleTypes.DRAGON_BREATH,
+                    rocket.getX(), rocket.getY() + 0.15, rocket.getZ(),
+                    3,
+                    0.1, 0.1, 0.1,
+                    0.02
+                );
+            }
+
             // Smoothly rotate current direction toward target
             Vec3d newDir = slerp(currentDir, toTarget, currentTurnRate);
             rocket.setVelocity(newDir.multiply(speed));
         } else {
+            data.wasLockedOn = false;
             // Direct lock lost — check if we can track the last known position/direction of the target
             Entity lastTarget = null;
             if (data.lastTargetId != -1) {
@@ -193,6 +272,7 @@ public class SeekerBehavior {
         public int lostTicks = 0;
         public int lastTargetId = -1;
         public Vec3d lastTargetPos = null;
+        public boolean wasLockedOn = false;
         private static final java.util.Map<Integer, SeekerData> TRACKER = new java.util.concurrent.ConcurrentHashMap<>();
 
         public static SeekerData getOrCreate(FireworkRocketEntity rocket) {

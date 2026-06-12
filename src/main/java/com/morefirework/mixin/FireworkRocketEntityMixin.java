@@ -96,7 +96,7 @@ public abstract class FireworkRocketEntityMixin {
             self.getX() + radius, self.getY() + radius, self.getZ() + radius
         );
 
-        for (Entity entity : self.getWorld().getOtherEntities(self.getOwner(), area)) {
+        for (Entity entity : self.getWorld().getOtherEntities(null, area)) {
             if (!(entity instanceof LivingEntity livingTarget)) continue;
             if (livingTarget.getWorld().isClient) continue;
 
