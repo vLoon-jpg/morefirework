@@ -435,7 +435,9 @@ public class SeekerBehavior {
         Box searchBox = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
             rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
         java.util.List<LivingEntity> pool = world.getEntitiesByClass(LivingEntity.class, searchBox,
-            e -> !e.isDead() && e != placer);
+            e -> !e.isDead() && e != placer && canSee(world, rocket, e));
+        // Sort by least contested first, then shuffle within tiers
+        pool.sort(java.util.Comparator.comparingInt(e -> SeekerData.getClaimCount(e.getId())));
         java.util.Collections.shuffle(pool);
         for (LivingEntity candidate : pool) {
             if (SeekerData.claimTarget(candidate.getId())) {
@@ -445,6 +447,15 @@ public class SeekerBehavior {
                 data.lastTargetPos = candidate.getPos().add(0, candidate.getHeight() / 2, 0);
                 return candidate;
             }
+        }
+        // No visible enemies found — self-lock onto the placer if they are a living entity
+        if (placer instanceof LivingEntity livingPlacer) {
+            SeekerData data = SeekerData.getOrCreate(rocket);
+            data.assignedTargetId = livingPlacer.getId();
+            data.lastTargetId = livingPlacer.getId();
+            data.lastTargetPos = livingPlacer.getPos().add(0, livingPlacer.getHeight() / 2, 0);
+            SeekerData.claimTarget(livingPlacer.getId());
+            return livingPlacer;
         }
         return null;
     }
