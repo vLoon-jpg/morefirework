@@ -212,6 +212,11 @@ public class SeekerBehavior {
         List<LivingEntity> candidates = world.getEntitiesByClass(LivingEntity.class, searchBox,
             e -> {
                 if (e.isDead()) return false;
+                // Placed/dispenser rockets: lock onto anyone (flag set at spawn).
+                // Crossbow shots: exclude owner (but self-lock from elytra is still possible via
+                // the owner being behind the rocket after launch).
+                SeekerData sd = SeekerData.getOrCreate(rocket);
+                if (!sd.placedOrDispensed && e == rocket.getOwner()) return false;
 
                 // Check Line of Sight
                 if (!canSee(world, rocket, e)) return false;
@@ -292,6 +297,7 @@ public class SeekerBehavior {
         public int lastTargetId = -1;
         public Vec3d lastTargetPos = null;
         public boolean wasLockedOn = false;
+        public boolean placedOrDispensed = false; // true = no owner exclusion at all
         private static final java.util.Map<Integer, SeekerData> TRACKER = new java.util.concurrent.ConcurrentHashMap<>();
 
         public static SeekerData getOrCreate(FireworkRocketEntity rocket) {

@@ -89,6 +89,8 @@ public class OreFireworkItem extends FireworkRocketItem {
         );
         rocket.setVelocity(launchDir.multiply(0.13)); // walking pace
         world.spawnEntity(rocket);
+        // Mark as placed — no owner exclusion in target acquisition
+        SeekerBehavior.SeekerData.getOrCreate(rocket).placedOrDispensed = true;
 
         if (!context.getPlayer().isCreative()) {
             context.getStack().decrement(1);

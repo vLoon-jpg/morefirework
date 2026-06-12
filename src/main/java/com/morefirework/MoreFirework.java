@@ -1,6 +1,8 @@
 package com.morefirework;
 
 import com.morefirework.item.ModItems;
+import com.morefirework.item.OreFireworkItem;
+import com.morefirework.effect.SeekerBehavior;
 import com.morefirework.effect.ModEffects;
 import com.morefirework.component.ModComponents;
 import net.fabricmc.api.ModInitializer;
@@ -8,6 +10,12 @@ import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
+import net.minecraft.block.DispenserBlock;
+import net.minecraft.block.dispenser.ItemDispenserBehavior;
+import net.minecraft.entity.projectile.FireworkRocketEntity;
+import net.minecraft.util.math.BlockPointer;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
@@ -69,6 +77,38 @@ public class MoreFirework implements ModInitializer {
         });
 
         LOGGER.info("More Firework initialized successfully.");
+
+        // Register dispenser behavior for all ore rockets
+        ItemDispenserBehavior seekerDispenserBehavior = new ItemDispenserBehavior() {
+            @Override
+            protected ItemStack dispenseSilently(BlockPointer pointer, ItemStack stack) {
+                if (!(stack.getItem() instanceof OreFireworkItem) || !OreFireworkItem.hasRedstone(stack)) {
+                    return super.dispenseSilently(pointer, stack);
+                }
+                Direction facing = pointer.state().get(DispenserBlock.FACING);
+                Vec3d pos = pointer.pos().toCenterPos().offset(facing, 0.6);
+                ItemStack toSpawn = stack.copy();
+                OreFireworkItem.ensureFireworks(toSpawn);
+                FireworkRocketEntity rocket = new FireworkRocketEntity(
+                    pointer.world(), toSpawn,
+                    pos.x, pos.y, pos.z,
+                    false
+                );
+                Vec3d dir = Vec3d.of(facing.getVector());
+                rocket.setVelocity(dir.multiply(0.13));
+                pointer.world().spawnEntity(rocket);
+                // Mark as dispensed — no owner, locks onto anyone
+                SeekerBehavior.SeekerData.getOrCreate(rocket).placedOrDispensed = true;
+                stack.decrement(1);
+                return stack;
+            }
+        };
+        for (OreFireworkItem item : new OreFireworkItem[]{
+            ModItems.DIAMOND_FIREWORK, ModItems.IRON_FIREWORK, ModItems.GOLD_FIREWORK,
+            ModItems.EMERALD_FIREWORK, ModItems.AMETHYST_FIREWORK
+        }) {
+            DispenserBlock.registerBehavior(item, seekerDispenserBehavior);
+        }
     }
 
     public static Identifier id(String path) {
