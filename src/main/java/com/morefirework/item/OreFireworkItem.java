@@ -11,9 +11,15 @@ import net.minecraft.component.type.FireworksComponent;
 import net.minecraft.item.FireworkRocketItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemUsageContext;
+import net.minecraft.util.ActionResult;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.projectile.FireworkRocketEntity;
+import net.minecraft.server.world.ServerWorld;
+import java.util.Random;
 
 import java.util.List;
 
@@ -51,6 +57,43 @@ public class OreFireworkItem extends FireworkRocketItem {
 
     public OreType getOreType() {
         return oreType;
+    }
+
+    /**
+     * When placed by hand on a block: if it's a seeker rocket, spawn it at the placement spot
+     * with a random direction, then let SeekerBehavior take over (it will scan for nearest target
+     * within beacon range and home in).
+     */
+    @Override
+    public ActionResult useOnBlock(ItemUsageContext context) {
+        if (!hasRedstone(context.getStack())) {
+            // Non-seeker: fall back to vanilla placement
+            return super.useOnBlock(context);
+        }
+        if (context.getWorld().isClient) return ActionResult.SUCCESS;
+
+        ServerWorld world = (ServerWorld) context.getWorld();
+        ItemStack stack = context.getStack().copy();
+        ensureFireworks(stack);
+
+        // Spawn at the clicked block face, pointing slightly upward in a random direction
+        Vec3d pos = context.getHitPos();
+        Random random = new Random();
+        double angle = random.nextDouble() * 2 * Math.PI;
+        Vec3d launchDir = new Vec3d(Math.cos(angle) * 0.3, 0.4, Math.sin(angle) * 0.3).normalize();
+
+        FireworkRocketEntity rocket = new FireworkRocketEntity(
+            world, stack,
+            pos.x, pos.y, pos.z,
+            false // not shotAtAngle — placed like a normal rocket
+        );
+        rocket.setVelocity(launchDir.multiply(0.13)); // walking pace
+        world.spawnEntity(rocket);
+
+        if (!context.getPlayer().isCreative()) {
+            context.getStack().decrement(1);
+        }
+        return ActionResult.SUCCESS;
     }
 
     @Override

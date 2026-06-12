@@ -56,7 +56,15 @@ public class SeekerBehavior {
         // --- Speed and turn rate ---
         // Current speed: read from actual velocity magnitude so acceleration/decel is smooth
         double currentSpeed = rocket.getVelocity().length();
-        if (currentSpeed < INITIAL_SPEED) currentSpeed = INITIAL_SPEED;
+        // Clamp to INITIAL_SPEED range so crossbow launch velocity doesn't bleed through
+        currentSpeed = Math.min(MAX_SPEED, Math.max(INITIAL_SPEED, currentSpeed));
+        // On first tick, force walking pace regardless of launch velocity
+        if (data.flightTicks == 1) {
+            Vec3d dir = rocket.getVelocity().normalize();
+            if (dir.lengthSquared() < 0.001) dir = new Vec3d(0, 0, 1);
+            rocket.setVelocity(dir.multiply(INITIAL_SPEED));
+            currentSpeed = INITIAL_SPEED;
+        }
 
         // Spawn menacing/sinister particle trail
         if (world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
@@ -203,7 +211,6 @@ public class SeekerBehavior {
 
         List<LivingEntity> candidates = world.getEntitiesByClass(LivingEntity.class, searchBox,
             e -> {
-                if (e == rocket.getOwner()) return false;
                 if (e.isDead()) return false;
 
                 // Check Line of Sight
