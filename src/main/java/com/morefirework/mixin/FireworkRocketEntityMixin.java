@@ -52,7 +52,16 @@ public abstract class FireworkRocketEntityMixin {
                     e -> e != self.getOwner() && e.isAlive());
                 if (!targets.isEmpty()) {
                     hasExploded = true;
-                    this.explode();
+                    // Fire shrapnel directly from here — don't wait for explode() to move the rocket further
+                    // Use direction from rocket to nearest target so cone faces them, not away
+                    LivingEntity nearest = targets.stream()
+                        .min(java.util.Comparator.comparingDouble(e -> e.squaredDistanceTo(self)))
+                        .orElse(targets.get(0));
+                    Vec3d dir = nearest.getPos().add(0, nearest.getHeight() / 2, 0).subtract(self.getPos());
+                    if (dir.lengthSquared() < 0.001) dir = self.getVelocity();
+                    GoldShotgun.shatter(self.getWorld(), self.getPos(), dir.normalize(),
+                        self.getOwner() != null ? self.getOwner() : self);
+                    self.discard();
                     ci.cancel();
                     return;
                 }

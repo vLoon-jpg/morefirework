@@ -20,10 +20,16 @@ import java.util.List;
  */
 public class SeekerBehavior {
 
-    // Speed curve: starts slow, speeds up
-    private static final double INITIAL_SPEED = 2.0;
-    private static final double ACCELERATION = 4.0;  // per second
-    private static final double MAX_SPEED = 35.0;
+    // Speed curve
+    private static final double INITIAL_SPEED = 1.5;   // blocks/tick — slow crawl at launch
+    private static final double LOCKED_MAX_SPEED = 20.0; // blocks/tick — fast when locked
+    private static final double ACCELERATION = 3.0;    // blocks/tick per second when locked
+    private static final double DECELERATION = 1.5;    // blocks/tick per second when lock lost
+    private static final double MAX_SPEED = 20.0;
+
+    // Turn rate curve (inverse of speed — faster = less agile)
+    private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
+    private static final double TURN_RATE_LOCKED_MIN = Math.toRadians(3); // committed fast turn when locked
 
     // Target acquisition
     private static final double SEEK_RANGE = 50.0;
@@ -47,17 +53,10 @@ public class SeekerBehavior {
         SeekerData data = SeekerData.getOrCreate(rocket);
         data.flightTicks++;
 
-        // Calculate turning rate which smoothly ramps up then degrades over time (avoid snapping at start)
-        double turnRate;
-        if (data.flightTicks < 30) {
-            // Smoothly ramp up turning capability from 2 to 8 degrees/tick during the first second of flight (tick 10 to 30)
-            double pct = Math.min(1.0, Math.max(0.0, (data.flightTicks - 10) / 20.0));
-            turnRate = Math.toRadians(2 + pct * 6);
-        } else {
-            // Degrade turning capability after peak (tick 30) down to 2 degrees/tick by 9 seconds (tick 180)
-            double pct = Math.min(1.0, Math.max(0.0, (data.flightTicks - 30) / 150.0));
-            turnRate = Math.toRadians(8 - pct * 6);
-        }
+        // --- Speed and turn rate ---
+        // Current speed: read from actual velocity magnitude so acceleration/decel is smooth
+        double currentSpeed = rocket.getVelocity().length();
+        if (currentSpeed < INITIAL_SPEED) currentSpeed = INITIAL_SPEED;
 
         // Spawn menacing/sinister particle trail
         if (world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
@@ -106,11 +105,14 @@ public class SeekerBehavior {
             data.lastTargetPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
             data.lostTicks = 0;
 
-            double speed = Math.min(MAX_SPEED, INITIAL_SPEED + (data.flightTicks / 20.0) * ACCELERATION);
-            
-            // Turn rate multiplier based on Emerald mark level
+            // Locked on: accelerate toward LOCKED_MAX_SPEED, reduce turn rate as speed climbs
+            // Turn rate inversely scales with speed: fast = committed, can't snap turn
             int emeraldLevel = ModComponents.get(activeTarget).getEmeraldLevel(worldTime);
-            double currentTurnRate = turnRate * emeraldMultiplier(emeraldLevel);
+            double newSpeed = Math.min(LOCKED_MAX_SPEED, currentSpeed + ACCELERATION / 20.0);
+            // Turn rate: lerp from HUNTING (slow) to LOCKED_MIN (fast) based on speed fraction
+            double speedFraction = Math.min(1.0, newSpeed / LOCKED_MAX_SPEED);
+            double turnRate = TURN_RATE_HUNTING - (TURN_RATE_HUNTING - TURN_RATE_LOCKED_MIN) * speedFraction;
+            turnRate *= emeraldMultiplier(emeraldLevel);
 
             Vec3d currentDir = rocket.getVelocity().normalize();
             Vec3d targetCenterPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
@@ -149,8 +151,8 @@ public class SeekerBehavior {
             }
 
             // Smoothly rotate current direction toward target
-            Vec3d newDir = slerp(currentDir, toTarget, currentTurnRate);
-            rocket.setVelocity(newDir.multiply(speed));
+            Vec3d newDir = slerp(currentDir, toTarget, turnRate);
+            rocket.setVelocity(newDir.multiply(newSpeed));
         } else {
             data.wasLockedOn = false;
             // Direct lock lost — check if we can track the last known position/direction of the target
@@ -162,25 +164,30 @@ public class SeekerBehavior {
             if (lastTarget instanceof LivingEntity && lastTarget.isAlive() && data.lastTargetPos != null) {
                 // Smart prediction: update last target position if they are still alive
                 data.lastTargetPos = lastTarget.getPos().add(0, lastTarget.getHeight() / 2, 0);
-                
-                double speed = Math.min(MAX_SPEED, INITIAL_SPEED + (data.flightTicks / 20.0) * ACCELERATION);
-                
+
                 Vec3d currentDir = rocket.getVelocity().normalize();
                 Vec3d toTarget = data.lastTargetPos.subtract(rocket.getPos()).normalize();
 
-                // Steer towards last known position
-                Vec3d newDir = slerp(currentDir, toTarget, turnRate);
-                rocket.setVelocity(newDir.multiply(speed));
-            }
+                // Lost lock but still chasing: decelerate and ramp turn rate back up step-by-step
+                // Turn rate increases as speed drops — the slower it gets the tighter it can turn
+                double newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
+                double speedFraction = Math.min(1.0, newSpeed / LOCKED_MAX_SPEED);
+                double turnRate = TURN_RATE_HUNTING - (TURN_RATE_HUNTING - TURN_RATE_LOCKED_MIN) * speedFraction;
 
-            // Increment lost timer
-            data.lostTicks++;
-            if (data.lostTicks >= LOST_TARGET_TICKS) {
-                SeekerData.remove(rocket);
-                rocket.discard();
-                // Visual self-destruct puff
-                world.createExplosion(null, rocket.getX(), rocket.getY(), rocket.getZ(),
-                    0f, false, World.ExplosionSourceType.NONE);
+                // Steer towards last known position — reset lost timer, we still have a chase target
+                Vec3d newDir = slerp(currentDir, toTarget, turnRate);
+                rocket.setVelocity(newDir.multiply(newSpeed));
+                data.lostTicks = 0; // still chasing, don't count down
+            } else {
+                // Truly lost — no lock and no living target to chase. Count down to self-destruct.
+                data.lostTicks++;
+                if (data.lostTicks >= LOST_TARGET_TICKS) {
+                    SeekerData.remove(rocket);
+                    rocket.discard();
+                    // Visual self-destruct puff
+                    world.createExplosion(null, rocket.getX(), rocket.getY(), rocket.getZ(),
+                        0f, false, World.ExplosionSourceType.NONE);
+                }
             }
         }
 
@@ -198,19 +205,24 @@ public class SeekerBehavior {
             e -> {
                 if (e == rocket.getOwner()) return false;
                 if (e.isDead()) return false;
-                
-                FireworkEffectComponent fx = ModComponents.get(e);
-                if (!fx.hasEmeraldMark(e.getWorld().getTime())) return false;
 
                 // Check Line of Sight
                 if (!canSee(world, rocket, e)) return false;
 
                 // Check if target is in 90-degree forward vision cone (45-degree half-angle)
+                // Emerald seeker locks onto anything; all others require heat signature
+                OreFireworkItem.OreType rocketType = OreFireworkItem.getOreType(rocket.getStack());
+                boolean needsHeat = rocketType != OreFireworkItem.OreType.EMERALD;
+                if (needsHeat) {
+                    FireworkEffectComponent fx = ModComponents.get(e);
+                    if (!fx.hasEmeraldMark(e.getWorld().getTime())) return false;
+                }
+
                 Vec3d forward = rocket.getVelocity().normalize();
                 Vec3d toTarget = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
                 double dot = forward.dotProduct(toTarget);
                 double angle = Math.acos(Math.min(1.0, Math.max(-1.0, dot)));
-                return angle <= Math.toRadians(45); // 90-degree vision cone
+                return angle <= Math.toRadians(60); // 120-degree vision cone
             });
 
         if (candidates.isEmpty()) return null;
