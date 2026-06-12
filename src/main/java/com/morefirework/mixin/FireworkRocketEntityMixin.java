@@ -130,9 +130,18 @@ public abstract class FireworkRocketEntityMixin {
                     self
                 ));
                 if (blockHit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
-                    // Hit a block — explode at the hit position
+                    // Hit a block — spawn impact particles then explode
                     SeekerData.remove(self);
-                    self.setPosition(blockHit.getPos().x, blockHit.getPos().y, blockHit.getPos().z);
+                    Vec3d hp = blockHit.getPos();
+                    self.setPosition(hp.x, hp.y, hp.z);
+                    if (self.getWorld() instanceof net.minecraft.server.world.ServerWorld sw) {
+                        sw.spawnParticles(net.minecraft.particle.ParticleTypes.EXPLOSION,
+                            hp.x, hp.y, hp.z, 1, 0, 0, 0, 0);
+                        sw.spawnParticles(net.minecraft.particle.ParticleTypes.LARGE_SMOKE,
+                            hp.x, hp.y, hp.z, 8, 0.3, 0.3, 0.3, 0.05);
+                        sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLAME,
+                            hp.x, hp.y, hp.z, 12, 0.2, 0.2, 0.2, 0.08);
+                    }
                     explode();
                     self.discard();
                     ci.cancel();

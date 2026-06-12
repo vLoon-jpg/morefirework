@@ -22,10 +22,10 @@ public class SeekerBehavior {
 
     // Speed curve
     private static final double INITIAL_SPEED = 0.13;  // blocks/tick — player walking speed
-    private static final double LOCKED_MAX_SPEED = 2.0; // blocks/tick — hard cap (safety)
-    private static final double ACCELERATION = 0.5;    // blocks/tick per second when target is faster
-    private static final double DECELERATION = 0.2;    // blocks/tick per second when lock lost
-    private static final double MAX_SPEED = 2.0;
+    private static final double LOCKED_MAX_SPEED = 0.6; // blocks/tick — light jog when locked
+    private static final double ACCELERATION = 0.1;    // blocks/tick per second when locked
+    private static final double DECELERATION = 0.05;   // blocks/tick per second when lock lost
+    private static final double MAX_SPEED = 0.6;
 
     // Turn rate curve (inverse of speed — faster = less agile)
     private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
@@ -209,14 +209,27 @@ public class SeekerBehavior {
                 rocket.setVelocity(newDir.multiply(newSpeed));
                 data.lostTicks = 0; // still chasing, don't count down
             } else {
-                // Truly lost — no lock and no living target to chase. Count down to self-destruct.
-                data.lostTicks++;
-                if (data.lostTicks >= LOST_TARGET_TICKS) {
-                    SeekerData.remove(rocket);
-                    rocket.discard();
-                    // Visual self-destruct puff
-                    world.createExplosion(null, rocket.getX(), rocket.getY(), rocket.getZ(),
-                        0f, false, World.ExplosionSourceType.NONE);
+                // Truly lost — try adaptive retargeting: find a new target preferring least-contested
+                LivingEntity newTarget = findLeastContestedTarget(world, rocket);
+                if (newTarget != null) {
+                    // Release old claim, claim new target
+                    if (data.assignedTargetId != -1) {
+                        SeekerData.releaseTarget(data.assignedTargetId);
+                    }
+                    data.assignedTargetId = newTarget.getId();
+                    data.lastTargetId = newTarget.getId();
+                    data.lastTargetPos = newTarget.getPos().add(0, newTarget.getHeight() / 2, 0);
+                    SeekerData.claimTarget(newTarget.getId());
+                    data.lostTicks = 0;
+                } else {
+                    // No targets anywhere — count down to self-destruct
+                    data.lostTicks++;
+                    if (data.lostTicks >= LOST_TARGET_TICKS) {
+                        SeekerData.remove(rocket);
+                        rocket.discard();
+                        world.createExplosion(null, rocket.getX(), rocket.getY(), rocket.getZ(),
+                            0f, false, World.ExplosionSourceType.NONE);
+                    }
                 }
             }
         }
@@ -245,15 +258,8 @@ public class SeekerBehavior {
                 // Check Line of Sight
                 if (!canSee(world, rocket, e)) return false;
 
-                // Check if target is in 90-degree forward vision cone (45-degree half-angle)
-                // Emerald seeker locks onto anything; all others require heat signature
-                OreFireworkItem.OreType rocketType = OreFireworkItem.getOreType(rocket.getStack());
-                boolean needsHeat = rocketType != OreFireworkItem.OreType.EMERALD;
-                if (needsHeat) {
-                    FireworkEffectComponent fx = ModComponents.get(e);
-                    if (!fx.hasEmeraldMark(e.getWorld().getTime())) return false;
-                }
-
+                // Check if target is in 120-degree forward vision cone (60-degree half-angle)
+                // All seekers lock onto any living entity — no heat requirement
                 Vec3d forward = rocket.getVelocity().normalize();
                 Vec3d toTarget = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
                 double dot = forward.dotProduct(toTarget);
@@ -293,6 +299,43 @@ public class SeekerBehavior {
             default -> 1.0;
         };
     }
+
+    /**
+     * Finds a new target when the rocket loses its current one.
+     * Prefers targets with the fewest rockets already assigned (least contested).
+     * Excludes the rocket's owner for crossbow shots.
+     */
+    private static LivingEntity findLeastContestedTarget(World world, FireworkRocketEntity rocket) {
+        if (world.isClient) return null;
+        SeekerData data = SeekerData.getOrCreate(rocket);
+        Entity owner = rocket.getOwner();
+
+        Box searchBox = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
+            rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
+        java.util.List<LivingEntity> pool = world.getEntitiesByClass(LivingEntity.class, searchBox,
+            e -> !e.isDead()
+                && !(data.placedOrDispensed ? false : e == owner) // crossbow: skip owner
+                && e.getId() != data.assignedTargetId);           // skip current (failed) target
+
+        if (pool.isEmpty()) return null;
+
+        // Sort by claim count ascending — least contested first
+        pool.sort(java.util.Comparator.comparingInt(e -> SeekerData.getClaimCount(e.getId())));
+
+        // Pick from the least contested tier (all with same min count)
+        int minCount = SeekerData.getClaimCount(pool.get(0).getId());
+        java.util.List<LivingEntity> tier = new java.util.ArrayList<>();
+        for (LivingEntity e : pool) {
+            if (SeekerData.getClaimCount(e.getId()) > minCount) break;
+            if (SeekerData.getClaimCount(e.getId()) < MAX_CLAIMS_PER_TARGET) tier.add(e);
+        }
+        if (tier.isEmpty()) return null;
+        java.util.Collections.shuffle(tier);
+        return tier.get(0);
+    }
+
+    // Expose MAX_CLAIMS_PER_TARGET so findLeastContestedTarget can read it
+    private static final int MAX_CLAIMS_PER_TARGET = SeekerData.MAX_CLAIMS_PER_TARGET;
 
     /**
      * Called at placement time. Scans all living entities within SEEK_RANGE, excludes the placer,
@@ -359,10 +402,18 @@ public class SeekerBehavior {
         public static void remove(FireworkRocketEntity rocket) {
             SeekerData d = TRACKER.get(rocket.getId());
             if (d != null && d.assignedTargetId != -1) {
-                CLAIM_COUNTS.merge(d.assignedTargetId, -1, Integer::sum);
-                CLAIM_COUNTS.remove(d.assignedTargetId, 0); // clean up zero entries
+                releaseTarget(d.assignedTargetId);
             }
             TRACKER.remove(rocket.getId());
+        }
+
+        public static void releaseTarget(int entityId) {
+            CLAIM_COUNTS.merge(entityId, -1, Integer::sum);
+            CLAIM_COUNTS.remove(entityId, 0);
+        }
+
+        public static int getClaimCount(int entityId) {
+            return CLAIM_COUNTS.getOrDefault(entityId, 0);
         }
 
         public static boolean claimTarget(int entityId) {
