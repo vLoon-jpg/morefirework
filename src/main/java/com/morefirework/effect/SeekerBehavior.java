@@ -272,24 +272,42 @@ public class SeekerBehavior {
         Vec3d forward = rocket.getVelocity().normalize();
         long worldTime = world.getTime();
 
-        // Priority: if any candidate has an emerald heat signature, pick the HIGHEST heat level
-        // regardless of how many rockets are already targeting them.
-        // Otherwise fall back to least-contested (fewest rockets assigned).
-        LivingEntity hottestTarget = null;
-        int maxHeat = 0;
+        // --- Target priority ---
+        // 1. Heat signatures: sort all hot candidates by heat level descending.
+        //    Hot targets are NEVER skipped even if already contested — highest heat always wins.
+        //    On retargeting (failed target), hot targets are still eligible (ignore failed-target exclusion).
+        java.util.List<LivingEntity> hotCandidates = new java.util.ArrayList<>();
         for (LivingEntity e : candidates) {
-            int heat = ModComponents.get(e).getEmeraldLevel(worldTime);
-            if (heat > maxHeat) {
-                maxHeat = heat;
-                hottestTarget = e;
-            }
+            if (ModComponents.get(e).getEmeraldLevel(worldTime) > 0) hotCandidates.add(e);
         }
-        if (hottestTarget != null) return hottestTarget;
+        if (!hotCandidates.isEmpty()) {
+            // Also include hot targets that were filtered out by assignedTargetId (failed target)
+            // by re-scanning without that exclusion
+            Box fullBox = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
+                rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
+            SeekerData sd2 = SeekerData.getOrCreate(rocket);
+            Entity owner2 = rocket.getOwner();
+            world.getEntitiesByClass(LivingEntity.class, fullBox, e -> {
+                if (e.isDead()) return false;
+                if (!sd2.placedOrDispensed && e == owner2) return false;
+                if (!canSee(world, rocket, e)) return false;
+                Vec3d fwd2 = rocket.getVelocity().normalize();
+                Vec3d toE = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
+                double ang = Math.acos(Math.min(1.0, Math.max(-1.0, fwd2.dotProduct(toE))));
+                if (ang > Math.toRadians(60)) return false;
+                int heat = ModComponents.get(e).getEmeraldLevel(worldTime);
+                if (heat > 0 && !hotCandidates.contains(e)) hotCandidates.add(e);
+                return false; // just collecting side effects
+            });
+            hotCandidates.sort((a, b) -> Integer.compare(
+                ModComponents.get(b).getEmeraldLevel(worldTime),
+                ModComponents.get(a).getEmeraldLevel(worldTime)));
+            return hotCandidates.get(0); // highest heat, no contest cap
+        }
 
-        // No heat signatures — lock onto target nearest to the center of the cone (largest dot product)
+        // 2. No heat signatures — least contested, break ties by cone-center alignment
         return candidates.stream()
             .min((e1, e2) -> {
-                // Prefer least contested, break ties by cone-center alignment
                 int c1 = SeekerData.getClaimCount(e1.getId());
                 int c2 = SeekerData.getClaimCount(e2.getId());
                 if (c1 != c2) return Integer.compare(c1, c2);
