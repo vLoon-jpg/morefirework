@@ -22,10 +22,10 @@ public class SeekerBehavior {
 
     // Speed curve
     private static final double INITIAL_SPEED = 0.13;  // blocks/tick — player walking speed
-    private static final double LOCKED_MAX_SPEED = 0.6; // blocks/tick — light jog when locked
-    private static final double ACCELERATION = 0.1;    // blocks/tick per second when locked
-    private static final double DECELERATION = 0.05;   // blocks/tick per second when lock lost
-    private static final double MAX_SPEED = 0.6;
+    private static final double LOCKED_MAX_SPEED = 2.0; // blocks/tick — hard cap (safety)
+    private static final double ACCELERATION = 0.5;    // blocks/tick per second when target is faster
+    private static final double DECELERATION = 0.2;    // blocks/tick per second when lock lost
+    private static final double MAX_SPEED = 2.0;
 
     // Turn rate curve (inverse of speed — faster = less agile)
     private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
@@ -135,8 +135,8 @@ public class SeekerBehavior {
                 double speedCap = Math.min(LOCKED_MAX_SPEED, targetSpeed + 0.13);
                 newSpeed = Math.min(speedCap, currentSpeed + ACCELERATION / 20.0);
             } else {
-                // Already faster than or equal to target — hold current speed, no further accel
-                newSpeed = currentSpeed;
+                // We are already faster than target — bleed back toward walking speed
+                newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
             }
 
             // Turn rate: inversely scales with speed — faster = more committed
