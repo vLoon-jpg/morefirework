@@ -4,15 +4,13 @@ import com.morefirework.component.FireworkEffectComponent;
 import com.morefirework.component.ModComponents;
 import com.morefirework.effect.GoldShotgun;
 import com.morefirework.effect.SeekerBehavior;
+import com.morefirework.effect.SeekerBehavior.SeekerData;
 import com.morefirework.item.OreFireworkItem;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import org.slf4j.Logger;
@@ -29,8 +27,10 @@ import java.util.*;
 public abstract class FireworkRocketEntityMixin {
     private static final Logger LOG = LoggerFactory.getLogger("morefirework:rocket");
 
-    @Shadow
-    private void explode() {}
+    @Shadow private void explode() {}
+
+    /** Shadowable vanilla life counter so we can reset it for infinite-flight placed rockets. */
+    @Shadow private int life;
 
     // One-shot flag: Gold proxy fuse must only trigger once per rocket lifetime
     private boolean hasExploded = false;
@@ -39,10 +39,6 @@ public abstract class FireworkRocketEntityMixin {
     private void morefirework$seekerTick(CallbackInfo ci) {
         FireworkRocketEntity self = (FireworkRocketEntity) (Object) this;
         ItemStack stack = self.getStack();
-        if (OreFireworkItem.hasRedstone(stack)) {
-            LOG.debug("Seeker tick — entity={}, pos=({},{},{})", 
-                self.getId(), (int)self.getX(), (int)self.getY(), (int)self.getZ());
-        }
 
         // Gold proxy fuse: check if within 3.5 blocks of any target — ONE SHOT ONLY
         if (!hasExploded && stack.getItem() instanceof OreFireworkItem oreItem && oreItem.getOreType() == OreFireworkItem.OreType.GOLD) {
@@ -52,8 +48,6 @@ public abstract class FireworkRocketEntityMixin {
                     e -> e != self.getOwner() && e.isAlive());
                 if (!targets.isEmpty()) {
                     hasExploded = true;
-                    // Fire shrapnel directly from here — don't wait for explode() to move the rocket further
-                    // Use direction from rocket to nearest target so cone faces them, not away
                     LivingEntity nearest = targets.stream()
                         .min(java.util.Comparator.comparingDouble(e -> e.squaredDistanceTo(self)))
                         .orElse(targets.get(0));
@@ -68,7 +62,35 @@ public abstract class FireworkRocketEntityMixin {
             }
         }
 
+        // For seeker rockets that were placed by hand or dispensed:
+        // 1. Reset the vanilla life counter every tick so it never reaches lifeTime and self-destructs.
+        // 2. After SeekerBehavior sets velocity, vanilla tick() will run and add 0.04 upward —
+        //    we cancel the vanilla tick entirely for these rockets and handle movement ourselves.
+        if (OreFireworkItem.hasRedstone(stack)) {
+            SeekerData data = SeekerBehavior.SeekerData.getOrCreate(self);
+            if (data.placedOrDispensed) {
+                // Reset life counter so vanilla never explodes this rocket on its own
+                this.life = 0;
+
+                // Run seeker behavior manually
+                SeekerBehavior.tick(self);
+
+                // Move the rocket ourselves using its current velocity (no vanilla upward boost)
+                Vec3d vel = self.getVelocity();
+                self.setPosition(self.getX() + vel.x, self.getY() + vel.y, self.getZ() + vel.z);
+                self.velocityDirty = true;
+
+                ci.cancel();
+                return;
+            }
+        }
+
         SeekerBehavior.tick(self);
+    }
+
+    // Helper to access SeekerData without a static import collision
+    private static SeekerBehavior.SeekerData SeekerData(FireworkRocketEntity rocket) {
+        return SeekerBehavior.SeekerData.getOrCreate(rocket);
     }
 
     /**
@@ -85,20 +107,8 @@ public abstract class FireworkRocketEntityMixin {
         var explosions = rocket.get(net.minecraft.component.DataComponentTypes.FIREWORKS);
         float radius = (explosions != null ? explosions.explosions().size() * 2f : 0f) + 5f;
 
-        // Gold shotgun is handled here — explosion AOE
-        if (type == OreFireworkItem.OreType.GOLD) {
-            Vec3d dir = self.getVelocity();
-            if (dir.lengthSquared() < 0.001) {
-                dir = new Vec3d(0, 1, 0); // default upward if stationary
-            }
-            GoldShotgun.shatter(
-                self.getWorld(),
-                self.getPos(),
-                dir.normalize(),
-                self.getOwner() != null ? self.getOwner() : self
-            );
-            return;
-        }
+        // Gold shotgun is handled by the proximity fuse above — skip here
+        if (type == OreFireworkItem.OreType.GOLD) return;
 
         Box area = new Box(
             self.getX() - radius, self.getY() - radius, self.getZ() - radius,
@@ -132,7 +142,6 @@ public abstract class FireworkRocketEntityMixin {
 
         switch (type) {
             case DIAMOND -> {
-                // Target sequential pattern: CHEST -> LEGS -> HEAD -> FEET
                 EquipmentSlot nextSlot = fx.getNextDiamondTarget();
                 if (nextSlot != null) {
                     fx.markDiamond(nextSlot);
@@ -142,13 +151,11 @@ public abstract class FireworkRocketEntityMixin {
                 }
             }
             case IRON -> {
-                // Apply 4 stacks unevenly: CHEST (highest) -> LEGS -> HEAD -> FEET (lowest)
                 applyWeightedStack(fx, "IRON", worldTime, random, 4);
                 LOG.info("  IRON — bleed stacks: {}", fx.getTotalBleed());
             }
             case AMETHYST -> {
                 if (fx.isCrystalizedImmune(worldTime)) break;
-                // Apply 6 stacks unevenly: CHEST (highest) -> LEGS -> HEAD -> FEET (lowest)
                 applyWeightedStack(fx, "AMETHYST", worldTime, random, 6);
                 LOG.info("  AMETHYST — fractured slots active: {}", fx.countFractured(worldTime));
             }
@@ -157,17 +164,15 @@ public abstract class FireworkRocketEntityMixin {
                 LOG.info("  EMERALD — heat level: {}", fx.getEmeraldLevel(worldTime));
             }
             case GOLD -> {
-                // Direct hit — shrapnel cone from impact toward target
                 Vec3d dir = target.getPos().subtract(self.getPos());
                 if (dir.lengthSquared() < 0.001) dir = new Vec3d(0, 1, 0);
-                GoldShotgun.shatter(target.getWorld(), target.getPos(), dir.normalize(), 
+                GoldShotgun.shatter(target.getWorld(), target.getPos(), dir.normalize(),
                     self.getOwner() != null ? self.getOwner() : self);
             }
         }
     }
 
     private static void applyWeightedStack(FireworkEffectComponent fx, String type, long worldTime, Random random, int count) {
-        // Weights: CHEST=40, LEGS=30, HEAD=20, FEET=10
         EquipmentSlot[] slots = {EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.HEAD, EquipmentSlot.FEET};
         int[] weights = {40, 30, 20, 10};
 
