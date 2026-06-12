@@ -26,4 +26,19 @@ public class ProjectileEntityMixin {
             }
         }
     }
+
+    /**
+     * Override canHit(Entity) to allow ore rockets to hit the owner too.
+     * Vanilla skips the owner until leftOwner=true (i.e. after the rocket
+     * travels some distance). This blocks point-blank self-hits entirely.
+     */
+    @Inject(method = "canHit(Lnet/minecraft/entity/Entity;)Z", at = @At("HEAD"), cancellable = true)
+    private void morefirework$oreFireworkHitOwner(net.minecraft.entity.Entity target, CallbackInfoReturnable<Boolean> cir) {
+        if ((Object) this instanceof FireworkRocketEntity firework) {
+            ItemStack stack = firework.getStack();
+            if (stack.getItem() instanceof OreFireworkItem) {
+                cir.setReturnValue(target.canBeHitByProjectile());
+            }
+        }
+    }
 }
