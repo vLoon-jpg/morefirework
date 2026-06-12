@@ -43,6 +43,45 @@ public class GoldShotgun {
             impactPos.x + RANGE, impactPos.y + RANGE, impactPos.z + RANGE
         );
 
+        // Spawn blinding particles flying toward each target in the cone
+        if (world instanceof net.minecraft.server.world.ServerWorld serverWorld) {
+            for (Entity entity : world.getOtherEntities(shooter, area)) {
+                if (!(entity instanceof LivingEntity target)) continue;
+                Vec3d toTarget = target.getPos().add(0, target.getHeight() / 2, 0).subtract(impactPos);
+                double distance = toTarget.length();
+                if (distance > RANGE || distance == 0) continue;
+                double dot = forward.dotProduct(toTarget.normalize());
+                double angle = Math.acos(Math.min(1.0, Math.max(-1.0, dot)));
+                if (angle > Math.toRadians(CONE_ANGLE / 2)) continue;
+
+                // Fire a burst of flash/smoke particles from impact point toward the target
+                Vec3d toDir = toTarget.normalize();
+                // Crit particles spray outward toward enemy — visually blinding
+                serverWorld.spawnParticles(
+                    net.minecraft.particle.ParticleTypes.CRIT,
+                    impactPos.x, impactPos.y + 0.5, impactPos.z,
+                    12,
+                    toDir.x * 1.5, toDir.y * 1.5, toDir.z * 1.5,
+                    0.3
+                );
+                // Smoke for thick obscuring cloud around impact
+                serverWorld.spawnParticles(
+                    net.minecraft.particle.ParticleTypes.LARGE_SMOKE,
+                    impactPos.x, impactPos.y + 0.5, impactPos.z,
+                    8,
+                    toDir.x * 0.8, toDir.y * 0.8, toDir.z * 0.8,
+                    0.15
+                );
+                // Flash (enchanted hit) particles right on the target
+                serverWorld.spawnParticles(
+                    net.minecraft.particle.ParticleTypes.ENCHANTED_HIT,
+                    target.getX(), target.getY() + target.getHeight() / 2, target.getZ(),
+                    16,
+                    0.3, 0.3, 0.3,
+                    0.2
+                );
+            }
+        }
         for (Entity entity : world.getOtherEntities(shooter, area)) {
             if (!(entity instanceof LivingEntity target)) continue;
 

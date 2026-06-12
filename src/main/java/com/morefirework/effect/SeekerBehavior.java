@@ -21,11 +21,11 @@ import java.util.List;
 public class SeekerBehavior {
 
     // Speed curve
-    private static final double INITIAL_SPEED = 1.5;   // blocks/tick — slow crawl at launch
-    private static final double LOCKED_MAX_SPEED = 20.0; // blocks/tick — fast when locked
-    private static final double ACCELERATION = 3.0;    // blocks/tick per second when locked
-    private static final double DECELERATION = 1.5;    // blocks/tick per second when lock lost
-    private static final double MAX_SPEED = 20.0;
+    private static final double INITIAL_SPEED = 0.15;  // blocks/tick — barely moving at launch
+    private static final double LOCKED_MAX_SPEED = 3.0; // blocks/tick — max speed when fully locked
+    private static final double ACCELERATION = 0.4;    // blocks/tick per second when locked
+    private static final double DECELERATION = 0.2;    // blocks/tick per second when lock lost
+    private static final double MAX_SPEED = 3.0;
 
     // Turn rate curve (inverse of speed — faster = less agile)
     private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
