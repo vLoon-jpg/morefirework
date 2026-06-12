@@ -107,6 +107,34 @@ public class SeekerBehavior {
 
         if (activeTarget != null) {
             // We have a direct lock-on target!
+            // If chasing a cold target, check if a hotter target entered the cone — switch if so.
+            // If chasing a hot target, never abandon.
+            int activeheat = ModComponents.get(activeTarget).getEmeraldLevel(worldTime);
+            if (activeheat == 0) {
+                // Cold target — check cone for a hot one
+                LivingEntity hotterTarget = null;
+                int maxHeat = 0;
+                Box cone = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
+                    rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
+                Vec3d fwd = rocket.getVelocity().normalize();
+                for (LivingEntity e : world.getEntitiesByClass(LivingEntity.class, cone, e2 -> !e2.isDead() && canSee(world, rocket, e2))) {
+                    Vec3d toE = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
+                    double ang = Math.acos(Math.min(1.0, Math.max(-1.0, fwd.dotProduct(toE))));
+                    if (ang > Math.toRadians(60)) continue;
+                    int heat = ModComponents.get(e).getEmeraldLevel(worldTime);
+                    if (heat > maxHeat) { maxHeat = heat; hotterTarget = e; }
+                }
+                if (hotterTarget != null && hotterTarget != activeTarget) {
+                    // Switch to hot target
+                    if (data.assignedTargetId != -1) SeekerData.releaseTarget(data.assignedTargetId);
+                    data.assignedTargetId = hotterTarget.getId();
+                    data.lastTargetId = hotterTarget.getId();
+                    data.lastTargetPos = hotterTarget.getPos().add(0, hotterTarget.getHeight() / 2, 0);
+                    SeekerData.claimTarget(hotterTarget.getId());
+                    activeTarget = hotterTarget;
+                }
+            }
+
             boolean justLockedOn = !data.wasLockedOn;
             data.wasLockedOn = true;
             data.lastTargetId = activeTarget.getId();
@@ -270,19 +298,18 @@ public class SeekerBehavior {
         List<LivingEntity> candidates = world.getEntitiesByClass(LivingEntity.class, searchBox,
             e -> {
                 if (e.isDead()) return false;
-                // Placed/dispenser rockets: lock onto anyone (flag set at spawn).
-                // Crossbow shots: exclude owner (but self-lock from elytra is still possible via
-                // the owner being behind the rocket after launch).
                 SeekerData sd = SeekerData.getOrCreate(rocket);
+                // Crossbow: exclude owner
                 if (!sd.placedOrDispensed && e == rocket.getOwner()) return false;
-                // Placed/dispensed rockets only chase their pre-assigned target
-                if (sd.placedOrDispensed && sd.assignedTargetId != -1 && e.getId() != sd.assignedTargetId) return false;
+                // Placed rockets in launch phase (flightTicks < 30): only chase pre-assigned target
+                // Placed rockets in homing phase (flightTicks >= 30): switch to cone-based targeting
+                // This lets placed rockets do the firework arc first, then hunt via cone like crossbow rockets
+                if (sd.placedOrDispensed && sd.flightTicks < 30 && sd.assignedTargetId != -1 && e.getId() != sd.assignedTargetId) return false;
 
                 // Check Line of Sight
                 if (!canSee(world, rocket, e)) return false;
 
                 // Check if target is in 120-degree forward vision cone (60-degree half-angle)
-                // All seekers lock onto any living entity — no heat requirement for initial filter
                 Vec3d forward = rocket.getVelocity().normalize();
                 Vec3d toTarget = e.getPos().add(0, e.getHeight() / 2, 0).subtract(rocket.getPos()).normalize();
                 double dot = forward.dotProduct(toTarget);
