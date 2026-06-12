@@ -88,10 +88,14 @@ public class OreFireworkItem extends FireworkRocketItem {
             pos.x, pos.y, pos.z,
             false // not shotAtAngle — placed like a normal rocket
         );
-        rocket.setVelocity(launchDir.multiply(0.13)); // walking pace
+        // Set velocity before AND after spawn — vanilla constructor may reset it
+        rocket.setVelocity(launchDir.multiply(0.13));
         world.spawnEntity(rocket);
+        rocket.setVelocity(launchDir.multiply(0.13)); // re-set after spawn in case vanilla reset it
         // Mark as placed — no owner exclusion in target acquisition
         SeekerBehavior.SeekerData.getOrCreate(rocket).placedOrDispensed = true;
+        // Assign a random unclaimed target from the area
+        SeekerBehavior.assignRandomTarget(world, rocket, context.getPlayer());
 
         if (!context.getPlayer().isCreative()) {
             context.getStack().decrement(1);

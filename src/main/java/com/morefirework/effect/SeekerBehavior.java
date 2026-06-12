@@ -239,6 +239,8 @@ public class SeekerBehavior {
                 // the owner being behind the rocket after launch).
                 SeekerData sd = SeekerData.getOrCreate(rocket);
                 if (!sd.placedOrDispensed && e == rocket.getOwner()) return false;
+                // Placed/dispensed rockets only chase their pre-assigned target
+                if (sd.placedOrDispensed && sd.assignedTargetId != -1 && e.getId() != sd.assignedTargetId) return false;
 
                 // Check Line of Sight
                 if (!canSee(world, rocket, e)) return false;
@@ -293,6 +295,30 @@ public class SeekerBehavior {
     }
 
     /**
+     * Called at placement time. Scans all living entities within SEEK_RANGE, excludes the placer,
+     * shuffles the list, picks the first unclaimed one, claims it, and stores on SeekerData.
+     * Returns the assigned entity or null if none available.
+     */
+    public static LivingEntity assignRandomTarget(World world, FireworkRocketEntity rocket, Entity placer) {
+        if (world.isClient) return null;
+        Box searchBox = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
+            rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
+        java.util.List<LivingEntity> pool = world.getEntitiesByClass(LivingEntity.class, searchBox,
+            e -> !e.isDead() && e != placer);
+        java.util.Collections.shuffle(pool);
+        for (LivingEntity candidate : pool) {
+            if (SeekerData.claimTarget(candidate.getId())) {
+                SeekerData data = SeekerData.getOrCreate(rocket);
+                data.assignedTargetId = candidate.getId();
+                data.lastTargetId = candidate.getId();
+                data.lastTargetPos = candidate.getPos().add(0, candidate.getHeight() / 2, 0);
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Spherical linear interpolation between two direction vectors.
      * Turns from a toward b by at most maxAngle radians.
      */
@@ -320,14 +346,27 @@ public class SeekerBehavior {
         public Vec3d lastTargetPos = null;
         public boolean wasLockedOn = false;
         public boolean placedOrDispensed = false; // true = no owner exclusion at all
+        public int assignedTargetId = -1; // for placed/dispensed rockets: pre-assigned random target
         private static final java.util.Map<Integer, SeekerData> TRACKER = new java.util.concurrent.ConcurrentHashMap<>();
+        // Tracks which entity IDs are already claimed by a placed/dispensed rocket
+        private static final java.util.Set<Integer> CLAIMED_TARGETS = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
 
         public static SeekerData getOrCreate(FireworkRocketEntity rocket) {
             return TRACKER.computeIfAbsent(rocket.getId(), id -> new SeekerData());
         }
 
         public static void remove(FireworkRocketEntity rocket) {
+            SeekerData d = TRACKER.get(rocket.getId());
+            if (d != null && d.assignedTargetId != -1) CLAIMED_TARGETS.remove(d.assignedTargetId);
             TRACKER.remove(rocket.getId());
+        }
+
+        public static boolean claimTarget(int entityId) {
+            return CLAIMED_TARGETS.add(entityId); // returns false if already claimed
+        }
+
+        public static boolean isClaimed(int entityId) {
+            return CLAIMED_TARGETS.contains(entityId);
         }
     }
 }

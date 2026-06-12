@@ -97,6 +97,8 @@ public class MoreFirework implements ModInitializer {
                 Vec3d dir = Vec3d.of(facing.getVector());
                 rocket.setVelocity(dir.multiply(0.13));
                 pointer.world().spawnEntity(rocket);
+                // Assign a random unclaimed target from the area
+                SeekerBehavior.assignRandomTarget(pointer.world(), rocket, null);
                 // Mark as dispensed — no owner, locks onto anyone
                 SeekerBehavior.SeekerData.getOrCreate(rocket).placedOrDispensed = true;
                 stack.decrement(1);
