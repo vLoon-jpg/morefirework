@@ -348,8 +348,9 @@ public class SeekerBehavior {
         public boolean placedOrDispensed = false; // true = no owner exclusion at all
         public int assignedTargetId = -1; // for placed/dispensed rockets: pre-assigned random target
         private static final java.util.Map<Integer, SeekerData> TRACKER = new java.util.concurrent.ConcurrentHashMap<>();
-        // Tracks which entity IDs are already claimed by a placed/dispensed rocket
-        private static final java.util.Set<Integer> CLAIMED_TARGETS = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+        // Tracks which entity IDs are already claimed by a placed/dispensed rocket (max 2 per target)
+        private static final java.util.Map<Integer, Integer> CLAIM_COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
+        private static final int MAX_CLAIMS_PER_TARGET = 2;
 
         public static SeekerData getOrCreate(FireworkRocketEntity rocket) {
             return TRACKER.computeIfAbsent(rocket.getId(), id -> new SeekerData());
@@ -357,16 +358,22 @@ public class SeekerBehavior {
 
         public static void remove(FireworkRocketEntity rocket) {
             SeekerData d = TRACKER.get(rocket.getId());
-            if (d != null && d.assignedTargetId != -1) CLAIMED_TARGETS.remove(d.assignedTargetId);
+            if (d != null && d.assignedTargetId != -1) {
+                CLAIM_COUNTS.merge(d.assignedTargetId, -1, Integer::sum);
+                CLAIM_COUNTS.remove(d.assignedTargetId, 0); // clean up zero entries
+            }
             TRACKER.remove(rocket.getId());
         }
 
         public static boolean claimTarget(int entityId) {
-            return CLAIMED_TARGETS.add(entityId); // returns false if already claimed
+            int count = CLAIM_COUNTS.getOrDefault(entityId, 0);
+            if (count >= MAX_CLAIMS_PER_TARGET) return false;
+            CLAIM_COUNTS.put(entityId, count + 1);
+            return true;
         }
 
         public static boolean isClaimed(int entityId) {
-            return CLAIMED_TARGETS.contains(entityId);
+            return CLAIM_COUNTS.getOrDefault(entityId, 0) >= MAX_CLAIMS_PER_TARGET;
         }
     }
 }
