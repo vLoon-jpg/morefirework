@@ -22,14 +22,15 @@ public class SeekerBehavior {
 
     // Speed curve
     private static final double INITIAL_SPEED = 0.28;  // blocks/tick — player sprinting speed
-    private static final double LOCKED_MAX_SPEED = 0.28; // blocks/tick — constant sprint
-    private static final double ACCELERATION = 0.1;    // blocks/tick per second when locked
-    private static final double DECELERATION = 0.05;   // blocks/tick per second when lock lost
-    private static final double MAX_SPEED = 0.28;
+    private static final double LOCKED_MAX_SPEED = 0.55; // blocks/tick — constant sprint
+    private static final double ACCELERATION = 0.15;    // blocks/tick per second when locked
+    private static final double DECELERATION = 0.20;   // blocks/tick per second when lock lost
+    private static final double MAX_SPEED = 0.55;
 
     // Turn rate curve (inverse of speed — faster = less agile)
     private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
-    private static final double TURN_RATE_LOCKED_MIN = Math.toRadians(3); // committed fast turn when locked
+    private static final double TURN_RATE_LOCKED_MIN = Math.toRadians(2); // committed fast turn when locked
+    private static final double TURN_RATE_REACQUIRE = Math.toRadians(40); // tight spin when braking to re-lock
 
     // Target acquisition
     private static final double SEEK_RANGE = 50.0;
@@ -167,9 +168,11 @@ public class SeekerBehavior {
                 newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
             }
 
-            // Turn rate: inversely scales with speed — faster = more committed
-            double speedFraction = Math.min(1.0, newSpeed / LOCKED_MAX_SPEED);
-            double turnRate = TURN_RATE_HUNTING - (TURN_RATE_HUNTING - TURN_RATE_LOCKED_MIN) * speedFraction;
+            // Turn rate: interpolates from TURN_RATE_REACQUIRE at INITIAL_SPEED to TURN_RATE_LOCKED_MIN at full speed
+            // Slower = tighter turning; faster = committed, dodgable
+            double speedFraction = (newSpeed - INITIAL_SPEED) / (LOCKED_MAX_SPEED - INITIAL_SPEED);
+            speedFraction = Math.max(0.0, Math.min(1.0, speedFraction));
+            double turnRate = TURN_RATE_REACQUIRE - (TURN_RATE_REACQUIRE - TURN_RATE_LOCKED_MIN) * speedFraction;
             turnRate *= emeraldMultiplier(emeraldLevel);
 
             Vec3d currentDir = rocket.getVelocity().normalize();
@@ -235,10 +238,13 @@ public class SeekerBehavior {
                         data.lastTargetPos = betterTarget.getPos().add(0, betterTarget.getHeight() / 2, 0);
                         SeekerData.claimTarget(betterTarget.getId());
                         data.lostTicks = 0;
-                        // Apply steering toward new target this tick
+                        // Apply steering toward new target this tick with decelerate + reacquire turn rate
+                        double newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
+                        double speedFraction = Math.max(0.0, Math.min(1.0, (newSpeed - INITIAL_SPEED) / (LOCKED_MAX_SPEED - INITIAL_SPEED)));
+                        double turnRate = TURN_RATE_REACQUIRE - (TURN_RATE_REACQUIRE - TURN_RATE_LOCKED_MIN) * speedFraction;
                         Vec3d newDir2 = slerp(rocket.getVelocity().normalize(),
-                            data.lastTargetPos.subtract(rocket.getPos()).normalize(), TURN_RATE_HUNTING);
-                        rocket.setVelocity(newDir2.multiply(Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0)));
+                            data.lastTargetPos.subtract(rocket.getPos()).normalize(), turnRate);
+                        rocket.setVelocity(newDir2.multiply(newSpeed));
                         return true;
                     }
                 }
@@ -252,8 +258,8 @@ public class SeekerBehavior {
                 // Lost lock but still chasing: decelerate and ramp turn rate back up step-by-step
                 // Turn rate increases as speed drops — the slower it gets the tighter it can turn
                 double newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
-                double speedFraction = Math.min(1.0, newSpeed / LOCKED_MAX_SPEED);
-                double turnRate = TURN_RATE_HUNTING - (TURN_RATE_HUNTING - TURN_RATE_LOCKED_MIN) * speedFraction;
+                double speedFraction = Math.max(0.0, Math.min(1.0, (newSpeed - INITIAL_SPEED) / (LOCKED_MAX_SPEED - INITIAL_SPEED)));
+                double turnRate = TURN_RATE_REACQUIRE - (TURN_RATE_REACQUIRE - TURN_RATE_LOCKED_MIN) * speedFraction;
 
                 // Steer towards last known position — reset lost timer, we still have a chase target
                 Vec3d newDir = slerp(currentDir, toTarget, turnRate);
