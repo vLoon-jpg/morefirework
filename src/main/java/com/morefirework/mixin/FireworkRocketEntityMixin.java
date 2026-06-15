@@ -76,91 +76,88 @@ public abstract class FireworkRocketEntityMixin {
             }
         }
 
-        // For seeker rockets that were placed by hand or dispensed:
-        // 1. Reset the vanilla life counter every tick so it never reaches lifeTime and self-destructs.
-        // 2. After SeekerBehavior sets velocity, vanilla tick() will run and add 0.04 upward —
-        //    we cancel the vanilla tick entirely for these rockets and handle movement ourselves.
+        // ALL seeker rockets (crossbow, placed, dispensed) need vanilla tick cancelled.
+        // Vanilla FireworkRocketEntity.tick() overwrites velocity to the shooter's
+        // movement speed AND repositions the rocket onto the shooter every tick.
+        // We handle movement ourselves to keep SeekerBehavior velocity intact.
         if (OreFireworkItem.hasRedstone(stack)) {
             SeekerData data = SeekerBehavior.SeekerData.getOrCreate(self);
-            if (data.placedOrDispensed) {
-                // Reset life counter so vanilla never explodes this rocket on its own
-                this.life = 0;
 
-                // Launch phase: fly straight up for 30 ticks before homing kicks in
-                if (data.flightTicks < 30) {
-                    Vec3d upVel = new Vec3d(0, 0.4, 0); // shoot up like a real firework
-                    self.setVelocity(upVel);
-                    Vec3d end2 = self.getPos().add(upVel);
-                    BlockHitResult bh2 = self.getWorld().raycast(new RaycastContext(
-                        self.getPos(), end2,
-                        RaycastContext.ShapeType.COLLIDER,
-                        RaycastContext.FluidHandling.NONE, self));
-                    if (bh2.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
-                        SeekerData.remove(self);
-                        self.setPosition(bh2.getPos().x, bh2.getPos().y, bh2.getPos().z);
-                        explode(); self.discard(); ci.cancel(); return;
-                    }
-                    self.setPosition(end2.x, end2.y, end2.z);
-                    data.flightTicks++; // manually tick so SeekerBehavior.tick() startup delay counts
-                    self.velocityDirty = true;
-                    ci.cancel();
-                    return;
-                }
+            // Reset vanilla life counter each tick — SeekerBehavior handles self-destruct via lostTicks
+            this.life = 0;
 
-                // Homing phase: run seeker behavior
-                SeekerBehavior.tick(self);
-
-                // Check entity collision — if touching assigned target, explode
-                if (!self.getWorld().isClient) {
-                    Box hitBox = self.getBoundingBox().expand(0.5);
-                    List<LivingEntity> touching = self.getWorld().getEntitiesByClass(LivingEntity.class, hitBox,
-                        e -> e.isAlive() && (data.assignedTargetId == -1 || e.getId() == data.assignedTargetId));
-                    if (!touching.isEmpty()) {
-                        SeekerData.remove(self);
-                        explode();
-                        self.discard();
-                        ci.cancel();
-                        return;
-                    }
-                }
-
-                // Move the rocket — raycast for block collisions
-                Vec3d vel = self.getVelocity();
-                Vec3d start = self.getPos();
-                Vec3d end = start.add(vel);
-                BlockHitResult blockHit = self.getWorld().raycast(new RaycastContext(
-                    start, end,
+            // Placed rockets: launch phase — fly straight up for 30 ticks before homing kicks in
+            if (data.placedOrDispensed && data.flightTicks < 30) {
+                Vec3d upVel = new Vec3d(0, 0.4, 0); // shoot up like a real firework
+                self.setVelocity(upVel);
+                Vec3d end2 = self.getPos().add(upVel);
+                BlockHitResult bh2 = self.getWorld().raycast(new RaycastContext(
+                    self.getPos(), end2,
                     RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE,
-                    self
-                ));
-                if (blockHit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
-                    // Hit a block — spawn impact particles then explode
+                    RaycastContext.FluidHandling.NONE, self));
+                if (bh2.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
                     SeekerData.remove(self);
-                    Vec3d hp = blockHit.getPos();
-                    self.setPosition(hp.x, hp.y, hp.z);
-                    if (self.getWorld() instanceof net.minecraft.server.world.ServerWorld sw) {
-                        sw.spawnParticles(net.minecraft.particle.ParticleTypes.EXPLOSION,
-                            hp.x, hp.y, hp.z, 1, 0, 0, 0, 0);
-                        sw.spawnParticles(net.minecraft.particle.ParticleTypes.LARGE_SMOKE,
-                            hp.x, hp.y, hp.z, 8, 0.3, 0.3, 0.3, 0.05);
-                        sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLAME,
-                            hp.x, hp.y, hp.z, 12, 0.2, 0.2, 0.2, 0.08);
-                    }
+                    self.setPosition(bh2.getPos().x, bh2.getPos().y, bh2.getPos().z);
+                    explode(); self.discard(); ci.cancel(); return;
+                }
+                self.setPosition(end2.x, end2.y, end2.z);
+                data.flightTicks++; // manually tick so SeekerBehavior.tick() startup delay counts
+                self.velocityDirty = true;
+                ci.cancel();
+                return;
+            }
+
+            // ALL seekers: run the homing behavior (speed/turn/pursuit)
+            SeekerBehavior.tick(self);
+
+            // Check entity collision — if touching assigned target, explode
+            if (!self.getWorld().isClient) {
+                Box hitBox = self.getBoundingBox().expand(0.5);
+                List<LivingEntity> touching = self.getWorld().getEntitiesByClass(LivingEntity.class, hitBox,
+                    e -> e.isAlive() && (data.assignedTargetId == -1 || e.getId() == data.assignedTargetId));
+                if (!touching.isEmpty()) {
+                    SeekerData.remove(self);
                     explode();
                     self.discard();
                     ci.cancel();
                     return;
                 }
-                self.setPosition(end.x, end.y, end.z);
-                self.velocityDirty = true;
+            }
 
+            // Manual movement with block collision — cancels vanilla tick which would
+            // overwrite our velocity with the shooter's movement speed
+            Vec3d vel = self.getVelocity();
+            Vec3d start = self.getPos();
+            Vec3d end = start.add(vel);
+            BlockHitResult blockHit = self.getWorld().raycast(new RaycastContext(
+                start, end,
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                self
+            ));
+            if (blockHit.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
+                SeekerData.remove(self);
+                Vec3d hp = blockHit.getPos();
+                self.setPosition(hp.x, hp.y, hp.z);
+                if (self.getWorld() instanceof net.minecraft.server.world.ServerWorld sw) {
+                    sw.spawnParticles(net.minecraft.particle.ParticleTypes.EXPLOSION,
+                        hp.x, hp.y, hp.z, 1, 0, 0, 0, 0);
+                    sw.spawnParticles(net.minecraft.particle.ParticleTypes.LARGE_SMOKE,
+                        hp.x, hp.y, hp.z, 8, 0.3, 0.3, 0.3, 0.05);
+                    sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLAME,
+                        hp.x, hp.y, hp.z, 12, 0.2, 0.2, 0.2, 0.08);
+                }
+                explode();
+                self.discard();
                 ci.cancel();
                 return;
             }
-        }
+            self.setPosition(end.x, end.y, end.z);
+            self.velocityDirty = true;
 
-        SeekerBehavior.tick(self);
+            ci.cancel();
+            return;
+        }
     }
 
     // Helper to access SeekerData without a static import collision
