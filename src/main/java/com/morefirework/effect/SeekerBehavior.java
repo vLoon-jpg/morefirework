@@ -22,10 +22,10 @@ public class SeekerBehavior {
 
     // Speed curve
     private static final double INITIAL_SPEED = 0.28;  // blocks/tick — player sprinting speed
-    private static final double LOCKED_MAX_SPEED = 0.55; // blocks/tick — constant sprint
-    private static final double ACCELERATION = 0.15;    // blocks/tick per second when locked
-    private static final double DECELERATION = 0.20;   // blocks/tick per second when lock lost
-    private static final double MAX_SPEED = 0.55;
+    private static final double LOCKED_MAX_SPEED = 2.0; // blocks/tick — faster than elytra boost
+    private static final double ACCELERATION = 0.80;    // blocks/tick per second when locked
+    private static final double DECELERATION = 1.0;   // blocks/tick per second when lock lost
+    private static final double MAX_SPEED = 2.0;
 
     // Turn rate curve (inverse of speed — faster = less agile)
     private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
