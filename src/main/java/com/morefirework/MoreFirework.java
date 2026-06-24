@@ -49,10 +49,14 @@ public class MoreFirework implements ModInitializer {
         ModEffects.register();
         ModComponents.register();
 
-        // Periodic cleanup of stale claim counts every 200 ticks (~10s)
+        // Periodic cleanup of stale seeker/component data every 200 ticks (~10s)
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (server.getTicks() % 200 == 0) {
-                SeekerBehavior.SeekerData.purgeStaleEntries();
+                for (var world : server.getWorlds()) {
+                    if (world instanceof net.minecraft.server.world.ServerWorld sw) {
+                        SeekerBehavior.SeekerData.purgeStaleEntries(sw);
+                    }
+                }
             }
         });
 

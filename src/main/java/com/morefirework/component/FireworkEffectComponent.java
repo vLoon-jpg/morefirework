@@ -170,7 +170,7 @@ public class FireworkEffectComponent {
     public void setCrystalizedImmunity(long worldTime, int durationTicks) { crystalizedImmunityUntil = worldTime + durationTicks; }
 
     // === Emerald ===
-    public void addEmeraldHit(long worldTime) { emeraldLevel = Math.min(3, emeraldLevel + 1); emeraldExpiry = worldTime + 9600; } // 8 minutes
+    public void addEmeraldHit(long worldTime) { emeraldLevel = Math.min(3, emeraldLevel + 1); emeraldExpiry = worldTime + 2400; } // 2 minutes
     public int getEmeraldLevel(long worldTime) { if (worldTime > emeraldExpiry) emeraldLevel = 0; return emeraldLevel; }
     public boolean hasEmeraldMark(long worldTime) { return getEmeraldLevel(worldTime) > 0; }
     public void setLastTarget(int id, Vec3d pos) { this.lastTargetId = id; this.lastTargetPos = pos; }

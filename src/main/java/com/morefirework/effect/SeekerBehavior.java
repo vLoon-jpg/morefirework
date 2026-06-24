@@ -21,16 +21,16 @@ import java.util.List;
 public class SeekerBehavior {
 
     // Speed curve
-    private static final double INITIAL_SPEED = 0.28;  // blocks/tick — player sprinting speed
+    private static final double INITIAL_SPEED = 0.55;  // blocks/tick — player sprint speed
     private static final double LOCKED_MAX_SPEED = 2.0; // blocks/tick — faster than elytra boost
-    private static final double ACCELERATION = 0.80;    // blocks/tick per second when locked
-    private static final double DECELERATION = 1.0;   // blocks/tick per second when lock lost
+    private static final double ACCELERATION = 1.20;    // blocks/tick per second when locked
+    private static final double DECELERATION = 1.50;   // blocks/tick per second when lock lost
     private static final double MAX_SPEED = 2.0;
 
     // Turn rate curve (inverse of speed — faster = less agile)
     private static final double TURN_RATE_HUNTING = Math.toRadians(15); // slow, tight turns when no lock
-    private static final double TURN_RATE_LOCKED_MIN = Math.toRadians(2); // committed fast turn when locked
-    private static final double TURN_RATE_REACQUIRE = Math.toRadians(40); // tight spin when braking to re-lock
+    private static final double TURN_RATE_LOCKED_MIN = Math.toRadians(3); // committed turn when locked
+    private static final double TURN_RATE_REACQUIRE = Math.toRadians(30); // tight spin when braking to re-lock
 
     // Target acquisition
     private static final double SEEK_RANGE = 50.0;
@@ -177,7 +177,21 @@ public class SeekerBehavior {
 
             Vec3d currentDir = rocket.getVelocity().normalize();
             Vec3d targetCenterPos = activeTarget.getPos().add(0, activeTarget.getHeight() / 2, 0);
-            Vec3d toTarget = targetCenterPos.subtract(rocket.getPos()).normalize();
+
+            // Aim at PREDICTED position, not current position — lead the target.
+            // Predict where the target will be based on its current velocity scaled by
+            // the time it'll take the rocket to arrive. At close range (<5 blocks), aim
+            // directly at current position (no lead needed). At long range, lead more.
+            Vec3d targetVel = activeTarget.getVelocity();
+            double eta = distToTarget / Math.max(newSpeed, 0.1); // ticks until impact
+            double leadFactor = Math.min(1.0, eta / 20.0);       // cap lead at 1 second prediction
+            Vec3d predictedPos = targetCenterPos.add(targetVel.multiply(leadFactor * 20.0));
+
+            Vec3d toTarget = predictedPos.subtract(rocket.getPos()).normalize();
+
+            // Scale turn rate inversely with distance — close range = snap harder to land the hit
+            double distanceScale = Math.min(1.5, 15.0 / Math.max(distToTarget, 1.0));
+            double finalTurnRate = turnRate * distanceScale;
 
             // Play lock-on warning sounds at the target player
             if (justLockedOn) {
@@ -211,8 +225,8 @@ public class SeekerBehavior {
                 );
             }
 
-            // Smoothly rotate current direction toward target
-            Vec3d newDir = slerp(currentDir, toTarget, turnRate);
+            // Smoothly rotate current direction toward predicted target position
+            Vec3d newDir = slerp(currentDir, toTarget, finalTurnRate);
             rocket.setVelocity(newDir.multiply(newSpeed));
         } else {
             data.wasLockedOn = false;
@@ -238,12 +252,18 @@ public class SeekerBehavior {
                         data.lastTargetPos = betterTarget.getPos().add(0, betterTarget.getHeight() / 2, 0);
                         SeekerData.claimTarget(betterTarget.getId());
                         data.lostTicks = 0;
-                        // Apply steering toward new target this tick with decelerate + reacquire turn rate
+                        // Apply steering toward new target with velocity prediction + distance scaling
                         double newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
                         double speedFraction = Math.max(0.0, Math.min(1.0, (newSpeed - INITIAL_SPEED) / (LOCKED_MAX_SPEED - INITIAL_SPEED)));
                         double turnRate = TURN_RATE_REACQUIRE - (TURN_RATE_REACQUIRE - TURN_RATE_LOCKED_MIN) * speedFraction;
+                        double dist = rocket.getPos().distanceTo(betterTarget.getPos());
+                        double distanceScale = Math.min(1.5, 15.0 / Math.max(dist, 1.0));
+                        Vec3d targetVel = betterTarget.getVelocity();
+                        double eta2 = dist / Math.max(newSpeed, 0.1);
+                        double leadFactor2 = Math.min(1.0, eta2 / 20.0);
+                        Vec3d predicted = betterTarget.getPos().add(0, betterTarget.getHeight() / 2, 0).add(targetVel.multiply(leadFactor2 * 20.0));
                         Vec3d newDir2 = slerp(rocket.getVelocity().normalize(),
-                            data.lastTargetPos.subtract(rocket.getPos()).normalize(), turnRate);
+                            predicted.subtract(rocket.getPos()).normalize(), turnRate * distanceScale);
                         rocket.setVelocity(newDir2.multiply(newSpeed));
                         return true;
                     }
@@ -253,16 +273,25 @@ public class SeekerBehavior {
                 data.lastTargetPos = lastTarget.getPos().add(0, lastTarget.getHeight() / 2, 0);
 
                 Vec3d currentDir = rocket.getVelocity().normalize();
-                Vec3d toTarget = data.lastTargetPos.subtract(rocket.getPos()).normalize();
+
+                // Track last target position with velocity prediction
+                Vec3d targetVel = lastTarget.getVelocity();
+                double distToLast = data.lastTargetPos.distanceTo(rocket.getPos());
+                double eta = distToLast / Math.max(currentSpeed, 0.1);
+                double leadFactor = Math.min(1.0, eta / 20.0);
+                Vec3d predictedPos = data.lastTargetPos.add(targetVel.multiply(leadFactor * 20.0));
+                Vec3d toTarget = predictedPos.subtract(rocket.getPos()).normalize();
 
                 // Lost lock but still chasing: decelerate and ramp turn rate back up step-by-step
-                // Turn rate increases as speed drops — the slower it gets the tighter it can turn
                 double newSpeed = Math.max(INITIAL_SPEED, currentSpeed - DECELERATION / 20.0);
                 double speedFraction = Math.max(0.0, Math.min(1.0, (newSpeed - INITIAL_SPEED) / (LOCKED_MAX_SPEED - INITIAL_SPEED)));
                 double turnRate = TURN_RATE_REACQUIRE - (TURN_RATE_REACQUIRE - TURN_RATE_LOCKED_MIN) * speedFraction;
 
-                // Steer towards last known position — reset lost timer, we still have a chase target
-                Vec3d newDir = slerp(currentDir, toTarget, turnRate);
+                // Scale turn rate by distance
+                double distanceScale = Math.min(1.5, 15.0 / Math.max(distToLast, 1.0));
+
+                // Steer towards predicted position — reset lost timer
+                Vec3d newDir = slerp(currentDir, toTarget, turnRate * distanceScale);
                 rocket.setVelocity(newDir.multiply(newSpeed));
                 data.lostTicks = 0; // still chasing, don't count down
             } else {
@@ -295,8 +324,8 @@ public class SeekerBehavior {
     }
 
     private static LivingEntity findTargetInVisionCone(World world, FireworkRocketEntity rocket) {
-        // Homing starts after a brief startup delay of 10 ticks (0.5s) to allow launching
-        if (SeekerData.getOrCreate(rocket).flightTicks < 10) return null;
+        // Start tracking immediately — rocket already has velocity from crossbow/spawn
+        if (SeekerData.getOrCreate(rocket).flightTicks < 3) return null;
 
         Box searchBox = new Box(rocket.getPos().subtract(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE),
             rocket.getPos().add(SEEK_RANGE, SEEK_RANGE, SEEK_RANGE));
@@ -307,10 +336,9 @@ public class SeekerBehavior {
                 SeekerData sd = SeekerData.getOrCreate(rocket);
                 // Crossbow: exclude owner
                 if (!sd.placedOrDispensed && e == rocket.getOwner()) return false;
-                // Placed rockets in launch phase (flightTicks < 30): only chase pre-assigned target
-                // Placed rockets in homing phase (flightTicks >= 30): switch to cone-based targeting
-                // This lets placed rockets do the firework arc first, then hunt via cone like crossbow rockets
-                if (sd.placedOrDispensed && sd.flightTicks < 30 && sd.assignedTargetId != -1 && e.getId() != sd.assignedTargetId) return false;
+                // Placed rockets in launch phase (flightTicks < 8): only chase pre-assigned target
+                // Placed rockets in homing phase (flightTicks >= 8): switch to cone-based targeting
+                if (sd.placedOrDispensed && sd.flightTicks < 8 && sd.assignedTargetId != -1 && e.getId() != sd.assignedTargetId) return false;
 
                 // Check Line of Sight
                 if (!canSee(world, rocket, e)) return false;
@@ -513,16 +541,39 @@ public class SeekerBehavior {
         }
 
         /**
-         * Periodic cleanup: remove CLAIM_COUNTS entries for entity IDs that no longer
-         * exist in any active TRACKER entry. Call this occasionally to prevent stale counts
-         * from blocking future rockets.
+         * Periodic cleanup: removes stale CLAIM_COUNTS and TRACKER entries.
+         * - CLAIM_COUNTS: entries whose target entity is no longer tracked by any active seeker
+         * - TRACKER: entries whose rocket entity no longer exists in any loaded world
+         * Call every 200 ticks to prevent memory leaks from chunk-unloaded / despawned rockets.
          */
-        public static void purgeStaleEntries() {
+        public static void purgeStaleEntries(net.minecraft.server.world.ServerWorld world) {
+            // Clean TRACKER: remove entries for rockets that no longer exist
+            java.util.List<Integer> deadRockets = new java.util.ArrayList<>();
+            for (java.util.Map.Entry<Integer, SeekerData> entry : TRACKER.entrySet()) {
+                if (world.getEntityById(entry.getKey()) == null) {
+                    if (entry.getValue().assignedTargetId != -1) {
+                        releaseTarget(entry.getValue().assignedTargetId);
+                    }
+                    deadRockets.add(entry.getKey());
+                }
+            }
+            for (int id : deadRockets) {
+                TRACKER.remove(id);
+            }
+
+            // Clean CLAIM_COUNTS: entries whose target ID no longer has any active tracker
             java.util.Set<Integer> active = new java.util.HashSet<>();
             for (SeekerData d : TRACKER.values()) {
                 if (d.assignedTargetId != -1) active.add(d.assignedTargetId);
             }
-            CLAIM_COUNTS.keySet().retainAll(active);
+            // Safe removeIf iteration instead of retainAll
+            java.util.List<Integer> deadClaims = new java.util.ArrayList<>();
+            for (int id : CLAIM_COUNTS.keySet()) {
+                if (!active.contains(id)) deadClaims.add(id);
+            }
+            for (int id : deadClaims) {
+                CLAIM_COUNTS.remove(id);
+            }
         }
 
         public static void releaseTarget(int entityId) {

@@ -3,7 +3,9 @@ package com.morefirework.component;
 import com.morefirework.MoreFirework;
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.server.world.ServerWorld;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,6 +22,14 @@ public class ModComponents {
 
     public static void remove(Entity entity) {
         DATA.remove(entity.getUuid());
+    }
+
+    /**
+     * Cleans up effect data for entities that no longer exist in any loaded world.
+     * Call periodically to prevent memory leaks from despawned mobs, etc.
+     */
+    public static void purgeStaleEntries(ServerWorld world, Set<UUID> activeThisTick) {
+        DATA.keySet().removeIf(uuid -> !activeThisTick.contains(uuid));
     }
 
     public static NbtCompound writeNbt(Entity entity) {

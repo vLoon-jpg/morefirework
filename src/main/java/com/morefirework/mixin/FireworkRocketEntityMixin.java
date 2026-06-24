@@ -86,8 +86,8 @@ public abstract class FireworkRocketEntityMixin {
             // Reset vanilla life counter each tick — SeekerBehavior handles self-destruct via lostTicks
             this.life = 0;
 
-            // Placed rockets: launch phase — fly straight up for 30 ticks before homing kicks in
-            if (data.placedOrDispensed && data.flightTicks < 30) {
+            // Placed rockets: launch phase — brief pop up (8 ticks, ~3 blocks) then home in
+            if (data.placedOrDispensed && data.flightTicks < 8) {
                 Vec3d upVel = new Vec3d(0, 0.4, 0); // shoot up like a real firework
                 self.setVelocity(upVel);
                 Vec3d end2 = self.getPos().add(upVel);
@@ -110,10 +110,16 @@ public abstract class FireworkRocketEntityMixin {
             // ALL seekers: run the homing behavior (speed/turn/pursuit)
             SeekerBehavior.tick(self);
 
-            // Check entity collision — if touching assigned target, explode
+            Vec3d startPos = self.getPos();
+            Vec3d vel = self.getVelocity();
+            Vec3d endPos = startPos.add(vel);
+
+            // Check entity collision across the SWEPT area (start→end) so fast seekers
+            // don't phase through targets between ticks
             if (!self.getWorld().isClient) {
-                Box hitBox = self.getBoundingBox().expand(0.5);
-                List<LivingEntity> touching = self.getWorld().getEntitiesByClass(LivingEntity.class, hitBox,
+                Box startBox = self.getBoundingBox();
+                Box sweptBox = startBox.union(startBox.offset(vel));
+                List<LivingEntity> touching = self.getWorld().getEntitiesByClass(LivingEntity.class, sweptBox,
                     e -> e.isAlive() && (data.assignedTargetId == -1 || e.getId() == data.assignedTargetId));
                 if (!touching.isEmpty()) {
                     SeekerData.remove(self);
@@ -126,11 +132,8 @@ public abstract class FireworkRocketEntityMixin {
 
             // Manual movement with block collision — cancels vanilla tick which would
             // overwrite our velocity with the shooter's movement speed
-            Vec3d vel = self.getVelocity();
-            Vec3d start = self.getPos();
-            Vec3d end = start.add(vel);
             BlockHitResult blockHit = self.getWorld().raycast(new RaycastContext(
-                start, end,
+                startPos, endPos,
                 RaycastContext.ShapeType.COLLIDER,
                 RaycastContext.FluidHandling.NONE,
                 self
@@ -152,7 +155,7 @@ public abstract class FireworkRocketEntityMixin {
                 ci.cancel();
                 return;
             }
-            self.setPosition(end.x, end.y, end.z);
+            self.setPosition(endPos.x, endPos.y, endPos.z);
             self.velocityDirty = true;
 
             ci.cancel();

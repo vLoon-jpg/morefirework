@@ -45,33 +45,36 @@ public class ModEffects {
             for (var world : server.getWorlds()) {
                 for (var entity : world.iterateEntities()) {
                     if (entity instanceof LivingEntity living) {
+                        // B1: Skip removed entities — don't process or create stale state
+                        if (living.isRemoved()) continue;
+
                         FireworkEffectComponent fx = ModComponents.get(living);
-                        
-                        // Process bleed once every 20 ticks (1 second) for drama/DoT
+
+                        // Process bleed once every 20 ticks (1 second)
                         if (tickCounter % 20 == 0) {
                             processBleedTick(living, fx);
                         }
-                        
+
                         processStunTick(living, fx);        // every tick — velocity lock
-                        
+
                         // Decay runs every 40 ticks (2 seconds)
                         if (tickCounter % 40 == 0) {
                             processFractureDecayTick(living, fx);
                         }
 
-                        // Process Brush Cleansing progress if entity is a player using a brush
+                        // Process Brush Cleansing
                         if (living instanceof ServerPlayerEntity player) {
                             if (player.isUsingItem() && player.getActiveItem().isOf(Items.BRUSH)) {
                                 net.minecraft.util.hit.HitResult hit = player.raycast(5.0, 1.0f, false);
                                 if (hit != null && hit.getType() != net.minecraft.util.hit.HitResult.Type.MISS) {
                                     fx.incrementBrushingTicks();
-                                    if (fx.getBrushingTicks() >= 60) { // 3 seconds
+                                    if (fx.getBrushingTicks() >= 60) {
                                         boolean cleansed = fx.cleanseOneMark(player.getWorld().getTime());
                                         fx.setBrushingTicks(0);
                                         if (cleansed) {
                                             player.getWorld().playSound(null, player.getBlockPos(),
                                                 SoundEvents.ITEM_BRUSH_BRUSHING_GENERIC, SoundCategory.PLAYERS, 1.0f, 1.5f);
-                                            player.getActiveItem().damage(1, player, player.getActiveHand() == net.minecraft.util.Hand.MAIN_HAND 
+                                            player.getActiveItem().damage(1, player, player.getActiveHand() == net.minecraft.util.Hand.MAIN_HAND
                                                 ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND);
                                             player.sendMessage(Text.literal("§a✔ Cleansed 1 combat mark."), true);
                                         }
@@ -83,7 +86,7 @@ public class ModEffects {
                                 fx.setBrushingTicks(0);
                             }
 
-                            // Dynamic actionbar HUD message for active stacks/marks
+                            // HUD actionbar message
                             long worldTime = player.getWorld().getTime();
                             if (worldTime % 10 == 0) {
                                 StringBuilder sb = new StringBuilder();
@@ -128,10 +131,10 @@ public class ModEffects {
                                     player.sendMessage(Text.literal(sb.toString()), true);
                                 }
 
-                                // Spawn subtle sparkle particles on diamond-marked armor pieces
+                                // Subtle diamond sparkle particles
                                 for (EquipmentSlot slot : EquipmentSlot.values()) {
-                                    if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR 
-                                        && fx.isDiamondMarked(slot) 
+                                    if (slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR
+                                        && fx.isDiamondMarked(slot)
                                         && !fx.isStabImmune(slot, worldTime)) {
                                         double px = player.getX() + (player.getRandom().nextDouble() - 0.5) * 0.6;
                                         double py = player.getY() + switch (slot) {
@@ -157,6 +160,15 @@ public class ModEffects {
                         }
                     }
                 }
+
+                // B1: Every 200 ticks — purge stale ModComponents for dead/removed entities
+                if (tickCounter % 200 == 0) {
+                    java.util.HashSet<java.util.UUID> activeUuids = new java.util.HashSet<>();
+                    for (var e : world.iterateEntities()) {
+                        if (e instanceof LivingEntity) activeUuids.add(e.getUuid());
+                    }
+                    ModComponents.purgeStaleEntries((net.minecraft.server.world.ServerWorld) world, activeUuids);
+                }
             }
         });
 
@@ -181,34 +193,33 @@ public class ModEffects {
             if (hasAmethyst) {
                 ItemStack armor = entity.getEquippedStack(slot);
                 if (!armor.isEmpty()) {
-                    // Durability damage run once a second (1% of max durability per stack)
                     int duraDamage = Math.max(1, (int)(armor.getMaxDamage() * 0.01f * stacks));
                     armor.damage(duraDamage, entity, slot);
                     LOG.debug("Bleed (amethyst combo) — {}, slot={}, stacks={}, duraDmg={}",
                         entity.getName().getString(), slot.getName(), stacks, duraDamage);
                 }
             } else {
-                // Total damage: stacks * 1.5f HP per second (0.75 hearts per stack per tick, ensuring death at full stacks)
                 totalDamage += stacks * 1.5f;
             }
         }
 
         if (totalDamage > 0) {
+            // B7: Reset hurtTime AFTER damage so bleed bypasses i-frames,
+            // but only for this damage instance — other attacks still protected
             DamageSource source = entity.getWorld().getDamageSources().create(BLEED_DAMAGE_TYPE);
             entity.damage(source, totalDamage);
-            // Bypass damage immunity frames so bleed registers instantly without delays
             ((LivingEntityAccessor) entity).setHurtTime(0);
             LOG.debug("Bleed tick — {}, damage={}hp, stacks={}",
                 entity.getName().getString(), totalDamage, bleedCount);
         }
 
-        // Consume exactly 1 stack total per damage/DoT tick
-        for (EquipmentSlot slot : EquipmentSlot.values()) {
-            if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
+        // B5: Consume bleed in weighted order: CHEST(40%) → LEGS(30%) → HEAD(20%) → FEET(10%)
+        EquipmentSlot[] consumeOrder = {EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.HEAD, EquipmentSlot.FEET};
+        for (EquipmentSlot slot : consumeOrder) {
             int stacks = fx.getBleed(slot);
             if (stacks > 0) {
                 fx.addBleed(slot, -1);
-                break; // only decrement 1 stack total
+                break;
             }
         }
     }
@@ -217,6 +228,11 @@ public class ModEffects {
         if (fx.isStunned(entity.getWorld().getTime())) {
             entity.setVelocity(0, 0, 0);
             entity.velocityModified = true;
+            // B6: Prevent gravity from pulling stunned entity down
+            entity.setNoGravity(true);
+        } else {
+            // Restore gravity when stun ends
+            entity.setNoGravity(false);
         }
     }
 
@@ -231,7 +247,7 @@ public class ModEffects {
         int fracturedCount = fx.countFractured(worldTime);
         float afterFracture = amount;
 
-        // --- Step 1: Fracture redirect (Armor → takes durability damage) ---
+        // Fracture redirect: HP damage → durability damage
         if (fracturedCount > 0) {
             float multiplier = switch (fracturedCount) {
                 case 1 -> 4.0f;
@@ -254,7 +270,6 @@ public class ModEffects {
                 }
             }
 
-            // Only redirect health damage to 0 if armor actually took durability damage
             if (anyArmorExists) {
                 afterFracture = 0;
             }
@@ -277,10 +292,9 @@ public class ModEffects {
             if (slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) continue;
             ItemStack armor = entity.getEquippedStack(slot);
             if (!armor.isEmpty()) {
-                // Apply a permanent 20% durability penalty
                 int currentMax = armor.getMaxDamage();
                 int penaltyAmount = Math.max(1, (int) (currentMax * 0.20f));
-                
+
                 int existingPenalty = armor.getOrDefault(OreFireworkItem.DURABILITY_PENALTY, 0);
                 armor.set(OreFireworkItem.DURABILITY_PENALTY, existingPenalty + penaltyAmount);
 
@@ -292,8 +306,8 @@ public class ModEffects {
         }
 
         fx.clearFracture();
-        fx.setCrystalizedImmunity(worldTime, 60 * 20); // 1-minute immunity
-        fx.stun(worldTime, 5 * 20); // 5-second stun
+        fx.setCrystalizedImmunity(worldTime, 60 * 20);
+        fx.stun(worldTime, 5 * 20);
 
         entity.getWorld().playSound(null, entity.getBlockPos(),
             SoundEvents.BLOCK_AMETHYST_BLOCK_BREAK, SoundCategory.PLAYERS, 2.0f, 0.5f);

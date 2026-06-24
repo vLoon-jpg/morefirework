@@ -44,7 +44,7 @@ A Minecraft Fabric mod that turns fireworks into a deep combat system. Craft ore
 - [Fabric API](https://modrinth.com/mod/fabric-api) 0.100.3+
 
 ### Steps
-1. Download `morefirework-0.1.0.jar` from [Releases](../../releases)
+1. Download `morefirework-0.1.1.jar` from [Releases](../../releases)
 2. Drop into `%appdata%\.minecraft\mods\`
 3. Also drop Fabric API jar into `mods\`
 4. Launch with Fabric Loader 1.21 profile
@@ -64,7 +64,7 @@ export JAVA_HOME="/path/to/jdk-21"
 export PATH="$JAVA_HOME/bin:$PATH"
 
 gradle --no-daemon build
-# Output: build/libs/morefirework-0.1.0.jar
+# Output: build/libs/morefirework-0.1.1.jar
 ```
 
 ### Tech stack
