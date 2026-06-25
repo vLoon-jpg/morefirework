@@ -1,0 +1,242 @@
+{
+  ".claude/settings.local.json": {
+    "mtime": 1781270890.067929,
+    "ast_hash": "edd7155c5433762d7f74d1effed20a52",
+    "semantic_hash": "edd7155c5433762d7f74d1effed20a52"
+  },
+  "build.gradle": {
+    "mtime": 1781232334.0494945,
+    "ast_hash": "28f121cbf5879fc2ef67c6eb9556dd3b",
+    "semantic_hash": "28f121cbf5879fc2ef67c6eb9556dd3b"
+  },
+  "settings.gradle": {
+    "mtime": 1781007486.3214395,
+    "ast_hash": "00f70cabf58e5a85d5862f595ccdd0de",
+    "semantic_hash": "00f70cabf58e5a85d5862f595ccdd0de"
+  },
+  "src/main/java/com/morefirework/MoreFirework.java": {
+    "mtime": 1782240948.4424527,
+    "ast_hash": "06cdfa4bed6952c3c35ab2afac24173c",
+    "semantic_hash": "06cdfa4bed6952c3c35ab2afac24173c"
+  },
+  "src/main/java/com/morefirework/MoreFireworkClient.java": {
+    "mtime": 1781007522.9993484,
+    "ast_hash": "1f85832b4b2e8a3be2ce19da9fe0ea2e",
+    "semantic_hash": "1f85832b4b2e8a3be2ce19da9fe0ea2e"
+  },
+  "src/main/java/com/morefirework/component/FireworkEffectComponent.java": {
+    "mtime": 1782241063.5058537,
+    "ast_hash": "cf214eca780d7cb36efdfc40ad8d2f3b",
+    "semantic_hash": "cf214eca780d7cb36efdfc40ad8d2f3b"
+  },
+  "src/main/java/com/morefirework/component/ModComponents.java": {
+    "mtime": 1782240182.995267,
+    "ast_hash": "669713e197b5f16e8bb7231627d818bc",
+    "semantic_hash": "669713e197b5f16e8bb7231627d818bc"
+  },
+  "src/main/java/com/morefirework/effect/GoldShotgun.java": {
+    "mtime": 1782240605.4314218,
+    "ast_hash": "aba96deb127a9754aa25e211a5d9dfd4",
+    "semantic_hash": "aba96deb127a9754aa25e211a5d9dfd4"
+  },
+  "src/main/java/com/morefirework/effect/ModEffects.java": {
+    "mtime": 1782240633.2398767,
+    "ast_hash": "b8d89cadf6fce1ec4c2929a16a63fec7",
+    "semantic_hash": "b8d89cadf6fce1ec4c2929a16a63fec7"
+  },
+  "src/main/java/com/morefirework/effect/SeekerBehavior.java": {
+    "mtime": 1782282476.7160027,
+    "ast_hash": "a2905febfd476d49c157aa27eb2f1424",
+    "semantic_hash": "a2905febfd476d49c157aa27eb2f1424"
+  },
+  "src/main/java/com/morefirework/item/ModItems.java": {
+    "mtime": 1781018866.2166402,
+    "ast_hash": "4f9b50e960517f88d83f65a353756dc7",
+    "semantic_hash": "4f9b50e960517f88d83f65a353756dc7"
+  },
+  "src/main/java/com/morefirework/item/OreFireworkItem.java": {
+    "mtime": 1781260123.8131864,
+    "ast_hash": "c24dea931ed753e515521535c0372e8a",
+    "semantic_hash": "c24dea931ed753e515521535c0372e8a"
+  },
+  "src/main/java/com/morefirework/mixin/ClientPlayerEntityMixin.java": {
+    "mtime": 1781008421.6263852,
+    "ast_hash": "ee85600568b81afb7df31a5fb0f2e0a9",
+    "semantic_hash": "ee85600568b81afb7df31a5fb0f2e0a9"
+  },
+  "src/main/java/com/morefirework/mixin/CrossbowItemMixin.java": {
+    "mtime": 1782281973.1466427,
+    "ast_hash": "4a9065d75d11d10d3e79f525358c18b6",
+    "semantic_hash": "4a9065d75d11d10d3e79f525358c18b6"
+  },
+  "src/main/java/com/morefirework/mixin/FireworkRocketEntityMixin.java": {
+    "mtime": 1782285017.1314473,
+    "ast_hash": "e11ac87ec3800d0511765bcb7152d3f1",
+    "semantic_hash": "e11ac87ec3800d0511765bcb7152d3f1"
+  },
+  "src/main/java/com/morefirework/mixin/ItemStackMixin.java": {
+    "mtime": 1781146627.1322868,
+    "ast_hash": "8a928e2cf09530429e4eabd7710e5fb9",
+    "semantic_hash": "8a928e2cf09530429e4eabd7710e5fb9"
+  },
+  "src/main/java/com/morefirework/mixin/LivingEntityAccessor.java": {
+    "mtime": 1781070487.1633976,
+    "ast_hash": "bb60a5631937a53e5f8474a71fb0cebc",
+    "semantic_hash": "bb60a5631937a53e5f8474a71fb0cebc"
+  },
+  "src/main/java/com/morefirework/mixin/LivingEntityArmorMixin.java": {
+    "mtime": 1781226304.4250562,
+    "ast_hash": "a1a83556bceb1b356eeb70feca550975",
+    "semantic_hash": "a1a83556bceb1b356eeb70feca550975"
+  },
+  "src/main/java/com/morefirework/mixin/LivingEntityMixin.java": {
+    "mtime": 1781226296.721022,
+    "ast_hash": "984c5e9721702a77084f68a27fd23542",
+    "semantic_hash": "984c5e9721702a77084f68a27fd23542"
+  },
+  "src/main/java/com/morefirework/mixin/PlayerDataMixin.java": {
+    "mtime": 1781008337.3258832,
+    "ast_hash": "44e943c290e58a031cc276ca114b27af",
+    "semantic_hash": "44e943c290e58a031cc276ca114b27af"
+  },
+  "src/main/java/com/morefirework/mixin/PlayerEntityMixin.java": {
+    "mtime": 1781008519.4775584,
+    "ast_hash": "64d7725e779acfbd826ba9a0c7cd3b94",
+    "semantic_hash": "64d7725e779acfbd826ba9a0c7cd3b94"
+  },
+  "src/main/java/com/morefirework/mixin/ProjectileEntityMixin.java": {
+    "mtime": 1781266653.0006728,
+    "ast_hash": "ec94f910ed14fc0dfb969873ed2ebd78",
+    "semantic_hash": "ec94f910ed14fc0dfb969873ed2ebd78"
+  },
+  "src/main/java/com/morefirework/recipe/OreFireworkRecipe.java": {
+    "mtime": 1781147102.7067502,
+    "ast_hash": "b9670abf40a7b03c3e71c3f840a689e2",
+    "semantic_hash": "b9670abf40a7b03c3e71c3f840a689e2"
+  },
+  "src/main/resources/assets/morefirework/lang/en_us.json": {
+    "mtime": 1781144380.8640652,
+    "ast_hash": "eb4c209790a4bf00f85398736d9b0f36",
+    "semantic_hash": "eb4c209790a4bf00f85398736d9b0f36"
+  },
+  "src/main/resources/assets/morefirework/models/item/amethyst_firework.json": {
+    "mtime": 1781022005.4984462,
+    "ast_hash": "d6deaf4e884e8015c50b3b5ed7b012d6",
+    "semantic_hash": "d6deaf4e884e8015c50b3b5ed7b012d6"
+  },
+  "src/main/resources/assets/morefirework/models/item/amethyst_ingot.json": {
+    "mtime": 1781022019.531278,
+    "ast_hash": "15ff5d167208d9f05f5564db73942e15",
+    "semantic_hash": "15ff5d167208d9f05f5564db73942e15"
+  },
+  "src/main/resources/assets/morefirework/models/item/diamond_firework.json": {
+    "mtime": 1781022005.7179382,
+    "ast_hash": "d6deaf4e884e8015c50b3b5ed7b012d6",
+    "semantic_hash": "d6deaf4e884e8015c50b3b5ed7b012d6"
+  },
+  "src/main/resources/assets/morefirework/models/item/diamond_ingot.json": {
+    "mtime": 1781022019.4392626,
+    "ast_hash": "055333317bbf9032e00eab86e862c27c",
+    "semantic_hash": "055333317bbf9032e00eab86e862c27c"
+  },
+  "src/main/resources/assets/morefirework/models/item/emerald_firework.json": {
+    "mtime": 1781022005.681257,
+    "ast_hash": "d6deaf4e884e8015c50b3b5ed7b012d6",
+    "semantic_hash": "d6deaf4e884e8015c50b3b5ed7b012d6"
+  },
+  "src/main/resources/assets/morefirework/models/item/gold_firework.json": {
+    "mtime": 1781022005.650024,
+    "ast_hash": "d6deaf4e884e8015c50b3b5ed7b012d6",
+    "semantic_hash": "d6deaf4e884e8015c50b3b5ed7b012d6"
+  },
+  "src/main/resources/assets/morefirework/models/item/iron_firework.json": {
+    "mtime": 1781022005.8786142,
+    "ast_hash": "d6deaf4e884e8015c50b3b5ed7b012d6",
+    "semantic_hash": "d6deaf4e884e8015c50b3b5ed7b012d6"
+  },
+  "src/main/resources/assets/morefirework/models/item/redstone_addon.json": {
+    "mtime": 1781022019.4218183,
+    "ast_hash": "773384963170a15c6a90f1e86c8fcf8e",
+    "semantic_hash": "773384963170a15c6a90f1e86c8fcf8e"
+  },
+  "src/main/resources/data/minecraft/tags/damage_type/bypasses_armor.json": {
+    "mtime": 1781144378.9796467,
+    "ast_hash": "7a014dc906735508269f8396b12c52c2",
+    "semantic_hash": "7a014dc906735508269f8396b12c52c2"
+  },
+  "src/main/resources/data/minecraft/tags/damage_type/bypasses_enchantments.json": {
+    "mtime": 1781144379.043064,
+    "ast_hash": "7a014dc906735508269f8396b12c52c2",
+    "semantic_hash": "7a014dc906735508269f8396b12c52c2"
+  },
+  "src/main/resources/data/minecraft/tags/items/crossbow_projectile.json": {
+    "mtime": 1781020561.2025402,
+    "ast_hash": "76b9fcac319902dc2624e4e405519b05",
+    "semantic_hash": "76b9fcac319902dc2624e4e405519b05"
+  },
+  "src/main/resources/data/morefirework/damage_type/bleed.json": {
+    "mtime": 1781144378.9633281,
+    "ast_hash": "9c3f6079be8dbaf6f86943943f18aeb4",
+    "semantic_hash": "9c3f6079be8dbaf6f86943943f18aeb4"
+  },
+  "src/main/resources/data/morefirework/recipes/amethyst_ingot.json": {
+    "mtime": 1781016427.664775,
+    "ast_hash": "9df21b52b308854513ca9216fe8af4b0",
+    "semantic_hash": "9df21b52b308854513ca9216fe8af4b0"
+  },
+  "src/main/resources/data/morefirework/recipes/amethyst_ingot_blasting.json": {
+    "mtime": 1781148130.6301274,
+    "ast_hash": "6b8bf006532d7b205c18b28ec081ba27",
+    "semantic_hash": "6b8bf006532d7b205c18b28ec081ba27"
+  },
+  "src/main/resources/data/morefirework/recipes/amethyst_ingot_smelting.json": {
+    "mtime": 1781148130.3444252,
+    "ast_hash": "2e0d5a77aee667650d8623e72c76e038",
+    "semantic_hash": "2e0d5a77aee667650d8623e72c76e038"
+  },
+  "src/main/resources/data/morefirework/recipes/diamond_ingot.json": {
+    "mtime": 1781016427.7524908,
+    "ast_hash": "462993f90744cea171fc2e80b311414a",
+    "semantic_hash": "462993f90744cea171fc2e80b311414a"
+  },
+  "src/main/resources/data/morefirework/recipes/diamond_ingot_blasting.json": {
+    "mtime": 1781148130.319011,
+    "ast_hash": "dc865b9ebe0a6d4549e9a303fbc7f8fa",
+    "semantic_hash": "dc865b9ebe0a6d4549e9a303fbc7f8fa"
+  },
+  "src/main/resources/data/morefirework/recipes/diamond_ingot_smelting.json": {
+    "mtime": 1781148130.2375548,
+    "ast_hash": "24f075141cf7bbafc37fb168fd57fad7",
+    "semantic_hash": "24f075141cf7bbafc37fb168fd57fad7"
+  },
+  "src/main/resources/data/morefirework/recipes/ore_firework.json": {
+    "mtime": 1781146623.1496434,
+    "ast_hash": "52e844e89463a44fceaa6a5d803f925e",
+    "semantic_hash": "52e844e89463a44fceaa6a5d803f925e"
+  },
+  "src/main/resources/data/morefirework/recipes/redstone_addon.json": {
+    "mtime": 1781009605.872611,
+    "ast_hash": "f6914b8c9a0b547632aa209a5f230a22",
+    "semantic_hash": "f6914b8c9a0b547632aa209a5f230a22"
+  },
+  "src/main/resources/fabric.mod.json": {
+    "mtime": 1781007502.5026252,
+    "ast_hash": "3dacc71185a0d75933bee39fa6694e89",
+    "semantic_hash": "3dacc71185a0d75933bee39fa6694e89"
+  },
+  "src/main/resources/morefirework.mixins.json": {
+    "mtime": 1782241044.1300547,
+    "ast_hash": "b21b2502581f469bed30c543e368f651",
+    "semantic_hash": "b21b2502581f469bed30c543e368f651"
+  },
+  ".hermes.md": {
+    "mtime": 1782320237.9290586,
+    "ast_hash": "b23c0da8348e4dfc0746215de287d4a4",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1782284242.592599,
+    "ast_hash": "585f2b92db215a5c0fc673460cb58709",
+    "semantic_hash": ""
+  }
+}
