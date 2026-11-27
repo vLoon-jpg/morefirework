@@ -24,15 +24,3 @@ Thumbs.db
 .env
 *.env
 graphify-out/
-
-# Local agent notes (private)
-.hermes/
-.hermes.md
-
-# Local agent notes and generated graph output (private)
-.hermes/
-.hermes.md
-.agents/
-.claude/
-.mcp.json
-graphify-out/
