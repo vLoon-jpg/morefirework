@@ -24,3 +24,7 @@ Thumbs.db
 .env
 *.env
 graphify-out/
+
+# Local agent notes (private)
+.hermes/
+.hermes.md
